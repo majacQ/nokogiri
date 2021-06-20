@@ -8,6 +8,46 @@ ROOT = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
 #
 # functions
 #
+def windows?
+  RbConfig::CONFIG['target_os'] =~ /mingw32|mswin/
+end
+
+def solaris?
+  RbConfig::CONFIG['target_os'] =~ /solaris/
+end
+
+def darwin?
+  RbConfig::CONFIG['target_os'] =~ /darwin/
+end
+
+def openbsd?
+  RbConfig::CONFIG['target_os'] =~ /openbsd/
+end
+
+def nix?
+  ! (windows? || solaris? || darwin?)
+end
+
+def sh_export_path path
+  # because libxslt 1.1.29 configure.in uses AC_PATH_TOOL which treats ":"
+  # as a $PATH separator, we need to convert windows paths from
+  #
+  #   C:/path/to/foo
+  #
+  # to
+  #
+  #   /C/path/to/foo
+  #
+  # which is sh-compatible, in order to find things properly during
+  # configuration
+  if windows?
+    match = Regexp.new("^([A-Z]):(/.*)").match(path)
+    if match && match.length == 3
+      return File.join("/", match[1], match[2])
+    end
+  end
+  path
+end
 
 def do_help
   print <<HELP
@@ -26,7 +66,7 @@ usage: ruby #{$0} [options]
         Use the zlib library placed under DIR.
 
     --use-system-libraries
-        Use system libraries intead of building and using the bundled
+        Use system libraries instead of building and using the bundled
         libraries.
 
     --with-xml2-dir=DIR / --with-xml2-config=CONFIG
@@ -55,10 +95,9 @@ def do_clean
     # nokogiri.so is yet to be copied to lib.
 
     # clean the ports build directory
-    Pathname.glob(pwd.join('tmp', '*', 'ports')) { |dir|
+    Pathname.glob(pwd.join('tmp', '*', 'ports')) do |dir|
       FileUtils.rm_rf(dir, verbose: true)
-      FileUtils.rmdir(dir.parent, parents: true, verbose: true)
-    }
+    end
 
     if enable_config('static')
       # ports installation can be safely removed if statically linked.
@@ -71,10 +110,56 @@ def do_clean
   exit! 0
 end
 
+def package_config pkg, options={}
+  package = pkg_config(pkg)
+  return package if package
+
+  begin
+    require 'rubygems'
+    gem 'pkg-config', (gem_ver='~> 1.1.7')
+    require 'pkg-config' and message("Using pkg-config gem version #{PKGConfig::VERSION}\n")
+  rescue LoadError
+    message "pkg-config could not be used to find #{pkg}\nPlease install either `pkg-config` or the pkg-config gem per\n\n    gem install pkg-config -v #{gem_ver.inspect}\n\n"
+  else
+    return nil unless PKGConfig.have_package(pkg)
+
+    cflags  = PKGConfig.cflags(pkg)
+    ldflags = PKGConfig.libs_only_L(pkg)
+    libs    = PKGConfig.libs_only_l(pkg)
+
+    Logging::message "PKGConfig package configuration for %s\n", pkg
+    Logging::message "cflags: %s\nldflags: %s\nlibs: %s\n\n", cflags, ldflags, libs
+
+    [cflags, ldflags, libs]
+  end
+end
+
+def nokogiri_try_compile
+  try_compile "int main() {return 0;}", "", {werror: true}
+end
+
+def check_libxml_version version=nil
+  source = if version.nil?
+             <<-SRC
+#include <libxml/xmlversion.h>
+             SRC
+           else
+             version_int = sprintf "%d%2.2d%2.2d", *(version.split("."))
+             <<-SRC
+#include <libxml/xmlversion.h>
+#if LIBXML_VERSION < #{version_int}
+#error libxml2 is older than #{version}
+#endif
+             SRC
+           end
+
+  try_cpp source
+end
+
 def add_cflags(flags)
   print "checking if the C compiler accepts #{flags}... "
   with_cflags("#{$CFLAGS} #{flags}") do
-    if try_compile("int main() {return 0;}", '', werror: true)
+    if nokogiri_try_compile
       puts 'yes'
       true
     else
@@ -103,9 +188,9 @@ def asplode(lib)
 end
 
 def have_iconv?(using = nil)
-  checking_for(using ? "iconv using #{using}" : 'iconv') {
-    ['', '-liconv'].any? { |opt|
-      preserving_globals {
+  checking_for(using ? "iconv using #{using}" : 'iconv') do
+    ['', '-liconv'].any? do |opt|
+      preserving_globals do
         yield if block_given?
 
         try_link(<<-'SRC', opt)
@@ -119,48 +204,58 @@ int main(void)
     return EXIT_SUCCESS;
 }
         SRC
-      }
-    }
-  }
+      end
+    end
+  end
 end
 
 def iconv_configure_flags
   # If --with-iconv-dir or --with-opt-dir is given, it should be
   # the first priority
-  %w[iconv opt].each { |name|
+  %w[iconv opt].each do |name|
     if (config = preserving_globals { dir_config(name) }).any? &&
-       have_iconv?("--with-#{name}-* flags") { dir_config(name) }
-      idirs, ldirs = config.map { |dirs|
-        Array(dirs).flat_map { |dir|
+        have_iconv?("--with-#{name}-* flags") { dir_config(name) }
+      idirs, ldirs = config.map do |dirs|
+        Array(dirs).flat_map do |dir|
           dir.split(File::PATH_SEPARATOR)
-        } if dirs
-      }
+        end if dirs
+      end
 
       return [
         '--with-iconv=yes',
-        *("CPPFLAGS=#{idirs.map { |dir| '-I' << dir }.join(' ')}".quote if idirs),
-        *("LDFLAGS=#{ldirs.map { |dir| '-L' << dir }.join(' ')}".quote if ldirs),
+        *("CPPFLAGS=#{idirs.map { |dir| '-I' << dir }.join(' ')}" if idirs),
+        *("LDFLAGS=#{ldirs.map { |dir| '-L' << dir }.join(' ')}" if ldirs),
       ]
     end
-  }
+  end
 
   if have_iconv?
     return ['--with-iconv=yes']
   end
 
-  if (config = preserving_globals { pkg_config('libiconv') }) &&
-     have_iconv?('pkg-config libiconv') { pkg_config('libiconv') }
+  if (config = preserving_globals { package_config('libiconv') }) &&
+     have_iconv?('pkg-config libiconv') { package_config('libiconv') }
     cflags, ldflags, libs = config
 
     return [
       '--with-iconv=yes',
-      "CPPFLAGS=#{cflags}".quote,
-      "LDFLAGS=#{ldflags}".quote,
-      "LIBS=#{libs}".quote,
+      "CPPFLAGS=#{cflags}",
+      "LDFLAGS=#{ldflags}",
+      "LIBS=#{libs}",
     ]
   end
 
   asplode "libiconv"
+end
+
+# When using rake-compiler-dock on Windows, the underlying Virtualbox shared
+# folders don't support symlinks, but libiconv expects it for a build on
+# Linux. We work around this limitation by using the temp dir for cooking.
+def chdir_for_build
+  build_dir = ENV['RCD_HOST_RUBY_PLATFORM'].to_s =~ /mingw|mswin|cygwin/ ? '/tmp' : '.'
+  Dir.chdir(build_dir) do
+    yield
+  end
 end
 
 def process_recipe(name, version, static_p, cross_p)
@@ -169,25 +264,25 @@ def process_recipe(name, version, static_p, cross_p)
     # Prefer host_alias over host in order to use i586-mingw32msvc as
     # correct compiler prefix for cross build, but use host if not set.
     recipe.host = RbConfig::CONFIG["host_alias"].empty? ? RbConfig::CONFIG["host"] : RbConfig::CONFIG["host_alias"]
-    recipe.patch_files = Dir[File.join(portsdir, "patches", name, "*.patch")].sort
+    recipe.patch_files = Dir[File.join(ROOT, "patches", name, "*.patch")].sort
 
     yield recipe
 
-    env = Hash.new { |hash, key|
+    env = Hash.new do |hash, key|
       hash[key] = "#{ENV[key]}"  # (ENV[key].dup rescue '')
-    }
+    end
 
     recipe.configure_options.flatten!
 
-    recipe.configure_options.delete_if { |option|
-      case option.shellsplit.first
+    recipe.configure_options.delete_if do |option|
+      case option
       when /\A(\w+)=(.*)\z/
         env[$1] = $2
         true
       else
         false
       end
-    }
+    end
 
     if static_p
       recipe.configure_options += [
@@ -210,30 +305,30 @@ def process_recipe(name, version, static_p, cross_p)
     end
 
     if RbConfig::CONFIG['target_cpu'] == 'universal'
-      %w[CFLAGS LDFLAGS].each { |key|
-        unless env[key].shellsplit.include?('-arch')
+      %w[CFLAGS LDFLAGS].each do |key|
+        unless env[key].include?('-arch')
           env[key] << ' ' << RbConfig::CONFIG['ARCH_FLAG']
         end
-      }
+      end
     end
 
-    recipe.configure_options += env.map { |key, value|
-      "#{key}=#{value}".shellescape
-    }
+    recipe.configure_options += env.map do |key, value|
+      "#{key}=#{value}"
+    end
 
     message <<-"EOS"
 ************************************************************************
 IMPORTANT NOTICE:
 
-Buidling Nokogiri with a packaged version of #{name}-#{version}#{'.' if recipe.patch_files.empty?}
+Building Nokogiri with a packaged version of #{name}-#{version}#{'.' if recipe.patch_files.empty?}
     EOS
 
     unless recipe.patch_files.empty?
       message "with the following patches applied:\n"
 
-      recipe.patch_files.each { |patch|
+      recipe.patch_files.each do |patch|
         message "\t- %s\n" % File.basename(patch)
-      }
+      end
     end
 
     message <<-"EOS"
@@ -265,7 +360,9 @@ versions of libxml2 provided by OS/package vendors.
 
     checkpoint = "#{recipe.target}/#{recipe.name}-#{recipe.version}-#{recipe.host}.installed"
     unless File.exist?(checkpoint)
-      recipe.cook
+      chdir_for_build do
+        recipe.cook
+      end
       FileUtils.touch checkpoint
     end
     recipe.activate
@@ -279,25 +376,8 @@ def lib_a(ldflag)
   end
 end
 
-#
-# monkey patches
-#
-
-# Workaround for Ruby bug #8074, introduced in Ruby 2.0.0, fixed in Ruby 2.1.0
-# https://bugs.ruby-lang.org/issues/8074
-@libdir_basename = "lib" if RUBY_VERSION < '2.1.0'
-
-# Workaround for #1102
-def monkey_patch_mini_portile
-  MiniPortile.class_eval do
-    def patch
-      @patch_files.each do |full_path|
-        next unless File.exists?(full_path)
-        output "Running patch with #{full_path}..."
-        execute('patch', %Q(patch -p1 < #{full_path}))
-      end
-    end
-  end
+def using_system_libraries?
+  arg_config('--use-system-libraries', !!ENV['NOKOGIRI_USE_SYSTEM_LIBRARIES'])
 end
 
 #
@@ -311,28 +391,34 @@ when arg_config('--clean')
   do_clean
 end
 
-RbConfig::MAKEFILE_CONFIG['CC'] = ENV['CC'] if ENV['CC']
-
-if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'macruby'
-  $LIBRUBYARG_STATIC.gsub!(/-static/, '')
+if openbsd?
+  ENV['CC'] ||= find_executable('egcc') or
+    abort "Please install gcc 4.9+ from ports using `pkg_add -v gcc`"
 end
+
+RbConfig::MAKEFILE_CONFIG['CC'] = ENV['CC'] if ENV['CC']
+# use same c compiler for libxml and libxslt
+ENV['CC'] = RbConfig::MAKEFILE_CONFIG['CC']
 
 $LIBS << " #{ENV["LIBS"]}"
 
 # Read CFLAGS from ENV and make sure compiling works.
 add_cflags(ENV["CFLAGS"])
 
-case RbConfig::CONFIG['target_os']
-when 'mingw32', /mswin/
-  windows_p = true
+if windows?
   $CFLAGS << " -DXP_WIN -DXP_WIN32 -DUSE_INCLUDED_VASPRINTF"
-when /solaris/
+end
+
+if solaris?
   $CFLAGS << " -DUSE_INCLUDED_VASPRINTF"
-when /darwin/
-  darwin_p = true
+end
+
+if darwin?
   # Let Apple LLVM/clang 5.1 ignore unknown compiler flags
   add_cflags("-Wno-error=unused-command-line-argument-hard-error-in-future")
-else
+end
+
+if nix?
   $CFLAGS << " -g -DXP_UNIX"
 end
 
@@ -348,7 +434,7 @@ if RbConfig::MAKEFILE_CONFIG['CC'] =~ /gcc/
 end
 
 case
-when arg_config('--use-system-libraries', !!ENV['NOKOGIRI_USE_SYSTEM_LIBRARIES'])
+when using_system_libraries?
   message "Building nokogiri using system libraries.\n"
 
   dir_config('zlib')
@@ -356,30 +442,24 @@ when arg_config('--use-system-libraries', !!ENV['NOKOGIRI_USE_SYSTEM_LIBRARIES']
   # Using system libraries means we rely on the system libxml2 with
   # regard to the iconv support.
 
-  dir_config('xml2').any?  or pkg_config('libxml-2.0')
-  dir_config('xslt').any?  or pkg_config('libxslt')
-  dir_config('exslt').any? or pkg_config('libexslt')
+  dir_config('xml2').any?  or package_config('libxml-2.0')
+  dir_config('xslt').any?  or package_config('libxslt')
+  dir_config('exslt').any? or package_config('libexslt')
 
-  try_cpp(<<-SRC) or abort "libxml2 version 2.6.21 or later is required!"
-#include <libxml/xmlversion.h>
+  check_libxml_version or abort "ERROR: cannot discover where libxml2 is located on your system. please make sure `pkg-config` is installed."
+  check_libxml_version("2.6.21") or abort "ERROR: libxml2 version 2.6.21 or later is required!"
+  check_libxml_version("2.9.3") or warn "WARNING: libxml2 version 2.9.3 or later is highly recommended, but proceeding anyway."
 
-#if LIBXML_VERSION < 20621
-#error libxml2 is way too old
-#endif
-  SRC
-
-  try_cpp(<<-SRC) or warn "libxml2 version 2.9.2 or later is highly recommended, but proceeding anyway."
-#include <libxml/xmlversion.h>
-
-#if LIBXML_VERSION < 20902
-#error libxml2 is too old
-#endif
-  SRC
 else
   message "Building nokogiri using packaged libraries.\n"
 
-  require 'mini_portile'
-  monkey_patch_mini_portile
+  # The gem version constraint in the Rakefile is not respected at install time.
+  # Keep this version in sync with the one in the Rakefile !
+  require 'rubygems'
+  gem 'mini_portile2', '~> 2.1.0'
+  require 'mini_portile2'
+  message "Using mini_portile version #{MiniPortile::VERSION}\n"
+
   require 'yaml'
 
   static_p = enable_config('static', true) or
@@ -390,9 +470,12 @@ else
   dependencies = YAML.load_file(File.join(ROOT, "dependencies.yml"))
 
   cross_build_p = enable_config("cross-build")
-  if cross_build_p || windows_p
-    zlib_recipe = process_recipe("zlib", dependencies["zlib"], static_p, cross_build_p) do |recipe|
-      recipe.files = ["http://zlib.net/#{recipe.name}-#{recipe.version}.tar.gz"]
+  if cross_build_p || windows?
+    zlib_recipe = process_recipe("zlib", dependencies["zlib"]["version"], static_p, cross_build_p) do |recipe|
+      recipe.files = [{
+          url: "http://zlib.net/#{recipe.name}-#{recipe.version}.tar.gz",
+          md5: dependencies["zlib"]["md5"]
+        }]
       class << recipe
         attr_accessor :cross_build_p
 
@@ -426,20 +509,23 @@ else
       recipe.cross_build_p = cross_build_p
     end
 
-    libiconv_recipe = process_recipe("libiconv", dependencies["libiconv"], static_p, cross_build_p) do |recipe|
-      recipe.files = ["http://ftp.gnu.org/pub/gnu/libiconv/#{recipe.name}-#{recipe.version}.tar.gz"]
+    libiconv_recipe = process_recipe("libiconv", dependencies["libiconv"]["version"], static_p, cross_build_p) do |recipe|
+      recipe.files = [{
+          url: "http://ftp.gnu.org/pub/gnu/libiconv/#{recipe.name}-#{recipe.version}.tar.gz",
+          md5: dependencies["libiconv"]["md5"]
+        }]
       recipe.configure_options += [
-        "CPPFLAGS='-Wall'",
-        "CFLAGS='-O2 -g'",
-        "CXXFLAGS='-O2 -g'",
+        "CPPFLAGS=-Wall",
+        "CFLAGS=-O2 -g",
+        "CXXFLAGS=-O2 -g",
         "LDFLAGS="
       ]
     end
   else
-    if darwin_p && !File.exist?('/usr/include/iconv.h')
+    if darwin? && !have_header('iconv.h')
       abort <<'EOM'.chomp
 -----
-The file "/usr/include/iconv.h" is missing in your build environment,
+The file "iconv.h" is missing in your build environment,
 which means you haven't installed Xcode Command Line Tools properly.
 
 To install Command Line Tools, try running `xcode-select --install` on
@@ -452,11 +538,21 @@ EOM
     end
   end
 
-  libxml2_recipe = process_recipe("libxml2", dependencies["libxml2"], static_p, cross_build_p) do |recipe|
-    recipe.files = ["ftp://ftp.xmlsoft.org/libxml2/#{recipe.name}-#{recipe.version}.tar.gz"]
+  unless windows?
+    preserving_globals {
+      have_library('z', 'gzdopen', 'zlib.h')
+    } or abort 'zlib is missing; necessary for building libxml2'
+  end
+
+  libxml2_recipe = process_recipe("libxml2", dependencies["libxml2"]["version"], static_p, cross_build_p) do |recipe|
+    recipe.files = [{
+        url: "http://xmlsoft.org/sources/#{recipe.name}-#{recipe.version}.tar.gz",
+        md5: dependencies["libxml2"]["md5"]
+      }]
     recipe.configure_options += [
       "--without-python",
       "--without-readline",
+      *(zlib_recipe ? ["--with-zlib=#{zlib_recipe.path}", "CFLAGS=-I#{zlib_recipe.path}/include"] : []),
       *(libiconv_recipe ? "--with-iconv=#{libiconv_recipe.path}" : iconv_configure_flags),
       "--with-c14n",
       "--with-debug",
@@ -464,13 +560,16 @@ EOM
     ]
   end
 
-  libxslt_recipe = process_recipe("libxslt", dependencies["libxslt"], static_p, cross_build_p) do |recipe|
-    recipe.files = ["ftp://ftp.xmlsoft.org/libxml2/#{recipe.name}-#{recipe.version}.tar.gz"]
+  libxslt_recipe = process_recipe("libxslt", dependencies["libxslt"]["version"], static_p, cross_build_p) do |recipe|
+    recipe.files = [{
+        url: "http://xmlsoft.org/sources/#{recipe.name}-#{recipe.version}.tar.gz",
+        md5: dependencies["libxslt"]["md5"]
+      }]
     recipe.configure_options += [
       "--without-python",
       "--without-crypto",
       "--with-debug",
-      "--with-libxml-prefix=#{libxml2_recipe.path}"
+      "--with-libxml-prefix=#{sh_export_path(libxml2_recipe.path)}"
     ]
   end
 
@@ -482,13 +581,13 @@ EOM
     have_library('lzma')
   }
 
-  $libs = $libs.shellsplit.tap { |libs|
-    [libxml2_recipe, libxslt_recipe].each { |recipe|
+  $libs = $libs.shellsplit.tap do |libs|
+    [libxml2_recipe, libxslt_recipe].each do |recipe|
       libname = recipe.name[/\Alib(.+)\z/, 1]
-      File.join(recipe.path, "bin", "#{libname}-config").tap { |config|
+      File.join(recipe.path, "bin", "#{libname}-config").tap do |config|
         # call config scripts explicit with 'sh' for compat with Windows
         $CPPFLAGS = `sh #{config} --cflags`.strip << ' ' << $CPPFLAGS
-        `sh #{config} --libs`.strip.shellsplit.each { |arg|
+        `sh #{config} --libs`.strip.shellsplit.each do |arg|
           case arg
           when /\A-L(.+)\z/
             # Prioritize ports' directories
@@ -502,12 +601,12 @@ EOM
           else
             $LDFLAGS << ' ' << arg.shellescape
           end
-        }
-      }
+        end
+      end
 
       # Defining a macro that expands to a C string; double quotes are significant.
-      $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATH=\"#{recipe.path}\"".shellescape
-      $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATCHES=\"#{recipe.patch_files.map { |path| File.basename(path) }.join(' ')}\"".shellescape
+      $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATH=\"#{recipe.path}\"".inspect
+      $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATCHES=\"#{recipe.patch_files.map { |path| File.basename(path) }.join(' ')}\"".inspect
 
       case libname
       when 'xml2'
@@ -522,11 +621,11 @@ EOM
         # -lexslt, so add it manually.
         libs.unshift('-lexslt')
       end
-    }
-  }.shelljoin
+    end
+  end.shelljoin
 
   if static_p
-    $libs = $libs.shellsplit.map { |arg|
+    $libs = $libs.shellsplit.map do |arg|
       case arg
       when '-lxml2'
         File.join(libxml2_recipe.path, 'lib', lib_a(arg))
@@ -535,7 +634,7 @@ EOM
       else
         arg
       end
-    }.shelljoin
+    end.shelljoin
   end
 end
 
@@ -543,12 +642,12 @@ end
   "xml2"  => ['xmlParseDoc',            'libxml/parser.h'],
   "xslt"  => ['xsltParseStylesheetDoc', 'libxslt/xslt.h'],
   "exslt" => ['exsltFuncRegister',      'libexslt/exslt.h'],
-}.each { |lib, (func, header)|
+}.each do |lib, (func, header)|
   have_func(func, header) ||
   have_library(lib, func, header) ||
   have_library("lib#{lib}", func, header) or
     asplode("lib#{lib}")
-}
+end
 
 have_func('xmlHasFeature') or abort "xmlHasFeature() is missing."
 have_func('xmlFirstElementChild')
@@ -568,14 +667,14 @@ create_makefile('nokogiri/nokogiri')
 
 if enable_config('clean', true)
   # Do not clean if run in a development work tree.
-  File.open('Makefile', 'at') { |mk|
+  File.open('Makefile', 'at') do |mk|
     mk.print <<EOF
 all: clean-ports
 
 clean-ports: $(DLLIB)
 	-$(Q)$(RUBY) $(srcdir)/extconf.rb --clean --#{static_p ? 'enable' : 'disable'}-static
 EOF
-  }
+  end
 end
 
 # :startdoc:

@@ -41,11 +41,17 @@ module Nokogiri
       # Nokogiri.XML() is a convenience method which will call this method.
       #
       def self.parse string_or_io, url = nil, encoding = nil, options = ParseOptions::DEFAULT_XML, &block
-        options = Nokogiri::XML::ParseOptions.new(options) if Fixnum === options
+        options = Nokogiri::XML::ParseOptions.new(options) if Integer === options
         # Give the options to the user
         yield options if block_given?
 
-        return new if !options.strict? && empty_doc?(string_or_io)
+        if empty_doc?(string_or_io)
+          if options.strict?
+            raise Nokogiri::XML::SyntaxError.new("Empty document")
+          else
+            return encoding ? new.tap { |i| i.encoding = encoding } : new
+          end
+        end
 
         doc = if string_or_io.respond_to?(:read)
           url ||= string_or_io.respond_to?(:path) ? string_or_io.path : nil

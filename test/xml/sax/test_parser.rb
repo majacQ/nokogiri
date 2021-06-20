@@ -44,13 +44,21 @@ module Nokogiri
         end
 
         def test_xml_decl
-          {
-            ''          => nil,
-            '<?xml version="1.0" ?>'                  => ['1.0'],
-            '<?xml version="1.0" encoding="UTF-8" ?>' => ['1.0', 'UTF-8'],
-            '<?xml version="1.0" standalone="yes"?>'  => ['1.0', 'yes'],
-            '<?xml version="1.0" standalone="no"?>'   => ['1.0', 'no'],
-          }.each do |decl,value|
+          [
+            ['', nil],
+            ['<?xml version="1.0" ?>',
+              ['1.0']],
+            ['<?xml version="1.0" encoding="UTF-8" ?>',
+              ['1.0', 'UTF-8']],
+            ['<?xml version="1.0" standalone="yes"?>',
+              ['1.0', 'yes']],
+            ['<?xml version="1.0" standalone="no"?>',
+              ['1.0', 'no']],
+            ['<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+              ['1.0', "UTF-8", 'no']],
+            ['<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>',
+              ['1.0', "ISO-8859-1", 'yes']]
+          ].each do |decl, value|
             parser = XML::SAX::Parser.new(Doc.new)
 
             xml = "#{decl}\n<root />"
@@ -136,12 +144,8 @@ module Nokogiri
 </root>
           eoxml
           assert_equal 5, @parser.document.start_elements.length
-          assert @parser.document.start_elements.map { |se|
-            se.first
-          }.include?('foo:bar')
-          assert @parser.document.end_elements.map { |se|
-            se.first
-          }.include?('foo:bar')
+          assert @parser.document.start_elements.map(&:first).include?('foo:bar')
+          assert @parser.document.end_elements.map(&:first).include?('foo:bar')
         end
 
         def test_start_is_called_without_namespace
@@ -151,7 +155,7 @@ module Nokogiri
 </root>
           eoxml
           assert_equal ['root', 'foo:f', 'bar'],
-            @parser.document.start_elements.map { |x| x.first }
+            @parser.document.start_elements.map(&:first)
         end
 
         def test_parser_sets_encoding
@@ -167,10 +171,8 @@ module Nokogiri
           assert @parser.document.errors
           assert @parser.document.errors.length > 0
 
-          if RUBY_VERSION =~ /^1\.9/
-            doc.errors.each do |error|
-              assert_equal 'UTF-8', error.message.encoding.name
-            end
+          doc.errors.each do |error|
+            assert_equal 'UTF-8', error.message.encoding.name
           end
 
           # when using JRuby Nokogiri, more errors will be generated as the DOM
@@ -207,42 +209,41 @@ module Nokogiri
             @parser.parse_io(f, encoding)
           }
           assert(@parser.document.cdata_blocks.length > 0)
-          if RUBY_VERSION =~ /^1\.9/
-            called = false
-            @parser.document.start_elements.flatten.each do |thing|
-              assert_equal 'UTF-8', thing.encoding.name
-              called = true
-            end
-            assert called
 
-            called = false
-            @parser.document.end_elements.flatten.each do |thing|
-              assert_equal 'UTF-8', thing.encoding.name
-              called = true
-            end
-            assert called
-
-            called = false
-            @parser.document.data.each do |thing|
-              assert_equal 'UTF-8', thing.encoding.name
-              called = true
-            end
-            assert called
-
-            called = false
-            @parser.document.comments.flatten.each do |thing|
-              assert_equal 'UTF-8', thing.encoding.name
-              called = true
-            end
-            assert called
-
-            called = false
-            @parser.document.cdata_blocks.flatten.each do |thing|
-              assert_equal 'UTF-8', thing.encoding.name
-              called = true
-            end
-            assert called
+          called = false
+          @parser.document.start_elements.flatten.each do |thing|
+            assert_equal 'UTF-8', thing.encoding.name
+            called = true
           end
+          assert called
+
+          called = false
+          @parser.document.end_elements.flatten.each do |thing|
+            assert_equal 'UTF-8', thing.encoding.name
+            called = true
+          end
+          assert called
+
+          called = false
+          @parser.document.data.each do |thing|
+            assert_equal 'UTF-8', thing.encoding.name
+            called = true
+          end
+          assert called
+
+          called = false
+          @parser.document.comments.flatten.each do |thing|
+            assert_equal 'UTF-8', thing.encoding.name
+            called = true
+          end
+          assert called
+
+          called = false
+          @parser.document.cdata_blocks.flatten.each do |thing|
+            assert_equal 'UTF-8', thing.encoding.name
+            called = true
+          end
+          assert called
         end
 
         def test_parse_file
@@ -375,6 +376,17 @@ module Nokogiri
           assert block_called
 
           assert_equal [['Root', []], ['Data', []], ['Item', []], ['Data', []], ['Item', []]], @parser.document.start_elements
+        end
+
+        def test_square_bracket_in_text  # issue 1261
+          xml = <<-eoxml
+<tu tuid="87dea04cf60af103ff09d1dba36ae820" segtype="block">
+  <prop type="x-smartling-string-variant">en:#:home_page:#:stories:#:[6]:#:name</prop>
+  <tuv xml:lang="en-US"><seg>Sandy S.</seg></tuv>
+</tu>
+          eoxml
+          @parser.parse(xml)
+          assert @parser.document.data.must_include "en:#:home_page:#:stories:#:[6]:#:name"
         end
       end
     end

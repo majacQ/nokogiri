@@ -35,13 +35,13 @@ static void relink_namespace(xmlNodePtr reparented)
   xmlNsPtr ns;
 
   if (reparented->type != XML_ATTRIBUTE_NODE &&
-      reparented->type != XML_ELEMENT_NODE) return;
+      reparented->type != XML_ELEMENT_NODE) { return; }
 
   if (reparented->ns == NULL || reparented->ns->prefix == NULL) {
     name = xmlSplitQName2(reparented->name, &prefix);
 
     if(reparented->type == XML_ATTRIBUTE_NODE) {
-      if (prefix == NULL || strcmp((char*)prefix, XMLNS_PREFIX) == 0) return;
+      if (prefix == NULL || strcmp((char*)prefix, XMLNS_PREFIX) == 0) { return; }
     }
 
     ns = xmlSearchNs(reparented->doc, reparented, prefix);
@@ -57,18 +57,19 @@ static void relink_namespace(xmlNodePtr reparented)
   }
 
   /* Avoid segv when relinking against unlinked nodes. */
-  if (reparented->type != XML_ELEMENT_NODE || !reparented->parent) return;
+  if (reparented->type != XML_ELEMENT_NODE || !reparented->parent) { return; }
 
   /* Make sure that our reparented node has the correct namespaces */
-  if(!reparented->ns && reparented->doc != (xmlDocPtr)reparented->parent)
+  if (!reparented->ns && reparented->doc != (xmlDocPtr)reparented->parent) {
     xmlSetNs(reparented, reparented->parent->ns);
+  }
 
   /* Search our parents for an existing definition */
-  if(reparented->nsDef) {
+  if (reparented->nsDef) {
     xmlNsPtr curr = reparented->nsDef;
     xmlNsPtr prev = NULL;
 
-    while(curr) {
+    while (curr) {
       xmlNsPtr ns = xmlSearchNsByHref(
           reparented->doc,
           reparented->parent,
@@ -76,7 +77,7 @@ static void relink_namespace(xmlNodePtr reparented)
       );
       /* If we find the namespace is already declared, remove it from this
        * definition list. */
-      if(ns && ns != curr) {
+      if (ns && ns != curr && xmlStrEqual(ns->prefix, curr->prefix)) {
         if (prev) {
           prev->next = curr->next;
         } else {
@@ -92,12 +93,12 @@ static void relink_namespace(xmlNodePtr reparented)
 
   /* Only walk all children if there actually is a namespace we need to */
   /* reparent. */
-  if(NULL == reparented->ns) return;
+  if (NULL == reparented->ns) { return; }
 
   /* When a node gets reparented, walk it's children to make sure that */
   /* their namespaces are reparented as well. */
   child = reparented->children;
-  while(NULL != child) {
+  while (NULL != child) {
     relink_namespace(child);
     child = child->next;
   }
@@ -140,6 +141,7 @@ static VALUE reparent_node_with(VALUE pivot_obj, VALUE reparentee_obj, pivot_rep
 {
   VALUE reparented_obj ;
   xmlNodePtr reparentee, pivot, reparented, next_text, new_next_text, parent ;
+  int original_ns_prefix_is_default = 0 ;
 
   if(!rb_obj_is_kind_of(reparentee_obj, cNokogiriXmlNode))
     rb_raise(rb_eArgError, "node must be a Nokogiri::XML::Node");
@@ -233,17 +235,37 @@ ok:
      *  uninteresting libxml2 implementation detail). as a result, we cannot
      *  reparent the actual reparentee, so we reparent a duplicate.
      */
+    if (reparentee->type == XML_TEXT_NODE && reparentee->_private) {
+      /*
+       *  additionally, since we know this C struct isn't going to be related to
+       *  a Ruby object anymore, let's break the relationship on this end as
+       *  well.
+       *
+       *  this is not absolutely necessary unless libxml-ruby is also in effect,
+       *  in which case its global callback `rxml_node_deregisterNode` will try
+       *  to do things to our data.
+       *
+       *  for more details on this particular (and particularly nasty) edge
+       *  case, see:
+       *
+       *    https://github.com/sparklemotion/nokogiri/issues/1426
+       */
+      reparentee->_private = NULL ;
+    }
+
+    if (reparentee->ns != NULL && reparentee->ns->prefix == NULL) {
+      original_ns_prefix_is_default = 1;
+    }
+
     nokogiri_root_node(reparentee);
 
-    xmlResetLastError();
-    xmlSetStructuredErrorFunc((void *)rb_iv_get(DOC_RUBY_OBJECT(pivot->doc), "@errors"), Nokogiri_error_array_pusher);
-
-    reparentee = xmlDocCopyNode(reparentee, pivot->doc, 1) ;
-
-    xmlSetStructuredErrorFunc(NULL, NULL);
-
-    if (! reparentee) {
+    if (!(reparentee = xmlDocCopyNode(reparentee, pivot->doc, 1))) {
       rb_raise(rb_eRuntimeError, "Could not reparent node (xmlDocCopyNode)");
+    }
+
+    if (original_ns_prefix_is_default && reparentee->ns != NULL && reparentee->ns->prefix != NULL) {
+      /* issue #391, where new node's prefix may become the string "default" */
+      reparentee->ns->prefix = NULL;
     }
   }
 
@@ -339,7 +361,7 @@ static VALUE encode_special_chars(VALUE self, VALUE string)
   Data_Get_Struct(self, xmlNode, node);
   encoded = xmlEncodeSpecialChars(
       node->doc,
-      (const xmlChar *)StringValuePtr(string)
+      (const xmlChar *)StringValueCStr(string)
   );
 
   encoded_str = NOKOGIRI_STR_NEW2(encoded);
@@ -375,9 +397,9 @@ static VALUE create_internal_subset(VALUE self, VALUE name, VALUE external_id, V
 
   dtd = xmlCreateIntSubset(
       doc,
-      NIL_P(name)        ? NULL : (const xmlChar *)StringValuePtr(name),
-      NIL_P(external_id) ? NULL : (const xmlChar *)StringValuePtr(external_id),
-      NIL_P(system_id)   ? NULL : (const xmlChar *)StringValuePtr(system_id)
+      NIL_P(name)        ? NULL : (const xmlChar *)StringValueCStr(name),
+      NIL_P(external_id) ? NULL : (const xmlChar *)StringValueCStr(external_id),
+      NIL_P(system_id)   ? NULL : (const xmlChar *)StringValueCStr(system_id)
   );
 
   if(!dtd) return Qnil;
@@ -406,9 +428,9 @@ static VALUE create_external_subset(VALUE self, VALUE name, VALUE external_id, V
 
   dtd = xmlNewDtd(
       doc,
-      NIL_P(name)        ? NULL : (const xmlChar *)StringValuePtr(name),
-      NIL_P(external_id) ? NULL : (const xmlChar *)StringValuePtr(external_id),
-      NIL_P(system_id)   ? NULL : (const xmlChar *)StringValuePtr(system_id)
+      NIL_P(name)        ? NULL : (const xmlChar *)StringValueCStr(name),
+      NIL_P(external_id) ? NULL : (const xmlChar *)StringValueCStr(external_id),
+      NIL_P(system_id)   ? NULL : (const xmlChar *)StringValueCStr(system_id)
   );
 
   if(!dtd) return Qnil;
@@ -481,13 +503,7 @@ static VALUE duplicate_node(int argc, VALUE *argv, VALUE self)
 
   Data_Get_Struct(self, xmlNode, node);
 
-  xmlResetLastError();
-  xmlSetStructuredErrorFunc(NULL, Nokogiri_error_silencer);
-
   dup = xmlDocCopyNode(node, node->doc, (int)NUM2INT(level));
-
-  xmlSetStructuredErrorFunc(NULL, NULL);
-
   if(dup == NULL) return Qnil;
 
   nokogiri_root_node(dup);
@@ -751,7 +767,7 @@ static VALUE key_eh(VALUE self, VALUE attribute)
 {
   xmlNodePtr node;
   Data_Get_Struct(self, xmlNode, node);
-  if(xmlHasProp(node, (xmlChar *)StringValuePtr(attribute)))
+  if(xmlHasProp(node, (xmlChar *)StringValueCStr(attribute)))
     return Qtrue;
   return Qfalse;
 }
@@ -766,8 +782,8 @@ static VALUE namespaced_key_eh(VALUE self, VALUE attribute, VALUE namespace)
 {
   xmlNodePtr node;
   Data_Get_Struct(self, xmlNode, node);
-  if(xmlHasNsProp(node, (xmlChar *)StringValuePtr(attribute),
-        NIL_P(namespace) ? NULL : (xmlChar *)StringValuePtr(namespace)))
+  if(xmlHasNsProp(node, (xmlChar *)StringValueCStr(attribute),
+        NIL_P(namespace) ? NULL : (xmlChar *)StringValueCStr(namespace)))
     return Qtrue;
   return Qfalse;
 }
@@ -792,7 +808,7 @@ static VALUE set(VALUE self, VALUE property, VALUE value)
    */
   if (node->type != XML_ELEMENT_NODE)
     return(Qnil);
-  prop = xmlHasProp(node, (xmlChar *)StringValuePtr(property));
+  prop = xmlHasProp(node, (xmlChar *)StringValueCStr(property));
   if (prop && prop->children) {
     for (cur = prop->children; cur; cur = cur->next) {
       if (cur->_private) {
@@ -802,8 +818,8 @@ static VALUE set(VALUE self, VALUE property, VALUE value)
     }
   }
 
-  xmlSetProp(node, (xmlChar *)StringValuePtr(property),
-      (xmlChar *)StringValuePtr(value));
+  xmlSetProp(node, (xmlChar *)StringValueCStr(property),
+      (xmlChar *)StringValueCStr(value));
 
   return value;
 }
@@ -826,7 +842,7 @@ static VALUE get(VALUE self, VALUE rattribute)
   if (NIL_P(rattribute)) return Qnil;
 
   Data_Get_Struct(self, xmlNode, node);
-  attribute = strdup(StringValuePtr(rattribute));
+  attribute = strdup(StringValueCStr(rattribute));
 
   colon = strchr(attribute, ':');
   if (colon) {
@@ -837,7 +853,7 @@ static VALUE get(VALUE self, VALUE rattribute)
     if (ns) {
       value = xmlGetNsProp(node, (xmlChar*)(attr_name), ns->href);
     } else {
-      value = xmlGetProp(node, (xmlChar*)StringValuePtr(rattribute));
+      value = xmlGetProp(node, (xmlChar*)StringValueCStr(rattribute));
     }
   } else {
     value = xmlGetNoNsProp(node, (xmlChar*)attribute);
@@ -884,7 +900,7 @@ static VALUE attr(VALUE self, VALUE name)
   xmlNodePtr node;
   xmlAttrPtr prop;
   Data_Get_Struct(self, xmlNode, node);
-  prop = xmlHasProp(node, (xmlChar *)StringValuePtr(name));
+  prop = xmlHasProp(node, (xmlChar *)StringValueCStr(name));
 
   if(! prop) return Qnil;
   return Nokogiri_wrap_xml_node(Qnil, (xmlNodePtr)prop);
@@ -901,8 +917,8 @@ static VALUE attribute_with_ns(VALUE self, VALUE name, VALUE namespace)
   xmlNodePtr node;
   xmlAttrPtr prop;
   Data_Get_Struct(self, xmlNode, node);
-  prop = xmlHasNsProp(node, (xmlChar *)StringValuePtr(name),
-      NIL_P(namespace) ? NULL : (xmlChar *)StringValuePtr(namespace));
+  prop = xmlHasNsProp(node, (xmlChar *)StringValueCStr(name),
+      NIL_P(namespace) ? NULL : (xmlChar *)StringValueCStr(namespace));
 
   if(! prop) return Qnil;
   return Nokogiri_wrap_xml_node(Qnil, (xmlNodePtr)prop);
@@ -1039,7 +1055,7 @@ static VALUE set_native_content(VALUE self, VALUE content)
     child = next ;
   }
 
-  xmlNodeSetContent(node, (xmlChar *)StringValuePtr(content));
+  xmlNodeSetContent(node, (xmlChar *)StringValueCStr(content));
   return content;
 }
 
@@ -1077,7 +1093,7 @@ static VALUE set_lang(VALUE self_rb, VALUE lang_rb)
   xmlChar* lang ;
 
   Data_Get_Struct(self_rb, xmlNode, self);
-  lang = (xmlChar*)StringValuePtr(lang_rb);
+  lang = (xmlChar*)StringValueCStr(lang_rb);
 
   xmlNodeSetLang(self, lang);
 
@@ -1142,7 +1158,7 @@ static VALUE set_name(VALUE self, VALUE new_name)
 {
   xmlNodePtr node;
   Data_Get_Struct(self, xmlNode, node);
-  xmlNodeSetName(node, (xmlChar*)StringValuePtr(new_name));
+  xmlNodeSetName(node, (xmlChar*)StringValueCStr(new_name));
   return new_name;
 }
 
@@ -1216,13 +1232,13 @@ static VALUE native_write_to(
 
   before_indent = xmlTreeIndentString;
 
-  xmlTreeIndentString = StringValuePtr(indent_string);
+  xmlTreeIndentString = StringValueCStr(indent_string);
 
   savectx = xmlSaveToIO(
       (xmlOutputWriteCallback)io_write_callback,
       (xmlOutputCloseCallback)io_close_callback,
       (void *)io,
-      RTEST(encoding) ? StringValuePtr(encoding) : NULL,
+      RTEST(encoding) ? StringValueCStr(encoding) : NULL,
       (int)NUM2INT(options)
   );
 
@@ -1269,7 +1285,7 @@ static VALUE add_namespace_definition(VALUE self, VALUE prefix, VALUE href)
   ns = xmlSearchNs(
       node->doc,
       node,
-      (const xmlChar *)(NIL_P(prefix) ? NULL : StringValuePtr(prefix))
+      (const xmlChar *)(NIL_P(prefix) ? NULL : StringValueCStr(prefix))
   );
 
   if(!ns) {
@@ -1278,8 +1294,8 @@ static VALUE add_namespace_definition(VALUE self, VALUE prefix, VALUE href)
     }
     ns = xmlNewNs(
         namespacee,
-        (const xmlChar *)StringValuePtr(href),
-        (const xmlChar *)(NIL_P(prefix) ? NULL : StringValuePtr(prefix))
+        (const xmlChar *)StringValueCStr(href),
+        (const xmlChar *)(NIL_P(prefix) ? NULL : StringValueCStr(prefix))
     );
   }
 
@@ -1309,7 +1325,7 @@ static VALUE new(int argc, VALUE *argv, VALUE klass)
 
   Data_Get_Struct(document, xmlDoc, doc);
 
-  node = xmlNewNode(NULL, (xmlChar *)StringValuePtr(name));
+  node = xmlNewNode(NULL, (xmlChar *)StringValueCStr(name));
   node->doc = doc->doc;
   nokogiri_root_node(node);
 

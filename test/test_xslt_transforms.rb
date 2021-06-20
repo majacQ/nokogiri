@@ -32,7 +32,40 @@ class TestXsltTransforms < Nokogiri::TestCase
     assert_match %r{<h1>Grandma</h1>}, result
 
     assert result = style.apply_to(@doc)
-    assert_match %r{<h1></h1>}, result
+    assert_match %r{<h1></h1>|<h1/>}, result
+  end
+
+  def test_xml_declaration
+    input_xml = <<-EOS
+<?xml version="1.0" encoding="utf-8"?>
+<report>
+  <title>My Report</title>
+</report>
+EOS
+
+    input_xsl = <<-EOS
+<?xml version="1.0" encoding="utf-8"?>
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <xsl:output method="xml" version="1.0" encoding="utf-8" indent="yes"/>
+  <xsl:template match="/">
+    <html>
+      <head>
+        <title><xsl:value-of select="report/title"/></title>
+      </head>
+      <body>
+        <h1><xsl:value-of select="report/title"/></h1>
+      </body>
+    </html>
+  </xsl:template>
+</xsl:stylesheet>
+EOS
+
+    require 'nokogiri'
+
+    xml = ::Nokogiri::XML(input_xml)
+    xsl = ::Nokogiri::XSLT(input_xsl)
+
+    assert_includes xsl.apply_to(xml), '<?xml version="1.0" encoding="utf-8"?>'
   end
 
   def test_transform_with_output_style
@@ -95,7 +128,9 @@ encoding="iso-8859-1" indent="yes"/>
 </xsl:stylesheet>
       eoxslt
     end
-    assert_no_match(/<td>/, xslt.apply_to(@doc, ['title', 'foo']))
+    result = xslt.apply_to(@doc, ['title', 'foo'])
+    assert_no_match(/<td>/, result)
+    assert_match(/This is an adjacent/, result)
   end
 
   def test_transform_arg_error
@@ -268,7 +303,7 @@ encoding="iso-8859-1" indent="yes"/>
         <xsl:output encoding="UTF-8" indent="yes" method="xml" />
 
         <xsl:template match="/">
-          <xsl:value-of select="/a" />
+          <a><xsl:value-of select="/a" /></a>
         </xsl:template>
       </xsl:stylesheet>
     EOXSL

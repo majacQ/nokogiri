@@ -45,7 +45,7 @@ parse_io(VALUE klass, VALUE io, VALUE encoding)
  */
 static VALUE parse_file(VALUE klass, VALUE filename)
 {
-  xmlParserCtxtPtr ctxt = xmlCreateFileParserCtxt(StringValuePtr(filename));
+  xmlParserCtxtPtr ctxt = xmlCreateFileParserCtxt(StringValueCStr(filename));
   return Data_Wrap_Struct(klass, NULL, deallocate, ctxt);
 }
 
@@ -206,7 +206,7 @@ static VALUE column(VALUE self)
  *  recovery=(boolean)
  *
  * Should this parser recover from structural errors? It will not stop processing
- * file on structural errors if if set to true
+ * file on structural errors if set to true
  */
 static VALUE set_recovery(VALUE self, VALUE value)
 {
@@ -226,7 +226,7 @@ static VALUE set_recovery(VALUE self, VALUE value)
  *  recovery
  *
  * Should this parser recover from structural errors? It will not stop processing
- * file on structural errors if if set to true
+ * file on structural errors if set to true
  */
 static VALUE get_recovery(VALUE self)
 {

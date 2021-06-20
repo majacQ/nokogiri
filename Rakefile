@@ -8,11 +8,9 @@ Hoe.plugin :debugging
 Hoe.plugin :git
 Hoe.plugin :gemspec
 Hoe.plugin :bundler
-Hoe.add_include_dirs '.'
 
 GENERATED_PARSER    = "lib/nokogiri/css/parser.rb"
 GENERATED_TOKENIZER = "lib/nokogiri/css/tokenizer.rb"
-CROSS_DIR           =  File.join(File.dirname(__FILE__), 'ports')
 
 def java?
   /java/ === RUBY_PLATFORM
@@ -25,14 +23,16 @@ CrossRuby = Struct.new(:version, :host) {
     @ver ||= version[/\A[^-]+/]
   end
 
+  def minor_ver
+    @minor_ver ||= ver[/\A\d\.\d(?=\.)/]
+  end
+
   def api_ver_suffix
-    case ver
-    when /\A([2-9])\.([0-9])\./
-      "#{$1}#{$2}0"
-    when /\A1\.9\./
-      '191'
-    else
+    case minor_ver
+    when nil
       raise "unsupported version: #{ver}"
+    else
+      minor_ver.delete('.') << '0'
     end
   end
 
@@ -101,8 +101,6 @@ CROSS_RUBIES = File.read('.cross_rubies').lines.flat_map { |line|
 
 ENV['RUBY_CC_VERSION'] ||= CROSS_RUBIES.map(&:ver).uniq.join(":")
 
-require 'tasks/nokogiri.org'
-
 HOE = Hoe.spec 'nokogiri' do
   developer 'Aaron Patterson', 'aaronp@rubyforge.org'
   developer 'Mike Dalessio',   'mike.dalessio@gmail.com'
@@ -112,8 +110,8 @@ HOE = Hoe.spec 'nokogiri' do
 
   license "MIT"
 
-  self.readme_file  = ['README',    ENV['HLANG'], 'rdoc'].compact.join('.')
-  self.history_file = ['CHANGELOG', ENV['HLANG'], 'rdoc'].compact.join('.')
+  self.readme_file  = "README.md"
+  self.history_file = "CHANGELOG.md"
 
   self.extra_rdoc_files = FileList['*.rdoc','ext/nokogiri/*.c']
 
@@ -121,35 +119,27 @@ HOE = Hoe.spec 'nokogiri' do
   self.clean_globs += [
     'nokogiri.gemspec',
     'lib/nokogiri/nokogiri.{bundle,jar,rb,so}',
-    'lib/nokogiri/[0-9].[0-9]',
-    'ports/*.installed',
-    'ports/{i[3-6]86,x86_64}-{w64-,}mingw32*',
-    'ports/libxml2',
-    'ports/libxslt',
-    # GENERATED_PARSER,
-    # GENERATED_TOKENIZER
+    'lib/nokogiri/[0-9].[0-9]'
   ]
+  self.clean_globs += Dir.glob("ports/*").reject { |d| d =~ %r{/archives$} }
 
   unless java?
     self.extra_deps += [
-      # this dependency locked because we're monkey-punching mini_portile.
-      # for more details, see:
-      # - https://github.com/sparklemotion/nokogiri/issues/1102
-      # - https://github.com/luislavena/mini_portile/issues/32
-      ["mini_portile",    "~> 0.6.0"],
+      ["mini_portile2",    "~> 2.1.0"], # keep version in sync with extconf.rb
     ]
   end
 
   self.extra_dev_deps += [
-    ["hoe-bundler",     ">= 1.1"],
-    ["hoe-debugging",   ">= 1.0.3"],
-    ["hoe-gemspec",     ">= 1.0"],
-    ["hoe-git",         ">= 1.4"],
-    ["minitest",        "~> 2.2.2"],
-    ["rake",            ">= 0.9"],
-    ["rake-compiler",   "~> 0.9.2"],
-    ["racc",            ">= 1.4.6"],
-    ["rexical",         ">= 1.0.5"]
+    ["hoe-bundler",        "~> 1.2.0"],
+    ["hoe-debugging",      "~> 1.2.1"],
+    ["hoe-gemspec",        "~> 1.0.0"],
+    ["hoe-git",            "~> 1.6.0"],
+    ["minitest",           "~> 5.8.4"],
+    ["rake",               "~> 10.5.0"],
+    ["rake-compiler",      "~> 0.9.2"],
+    ["rake-compiler-dock", "~> 0.5.1"],
+    ["racc",               "~> 1.4.14"],
+    ["rexical",            "~> 1.0.5"]
   ]
 
   if java?
@@ -157,7 +147,7 @@ HOE = Hoe.spec 'nokogiri' do
   else
     self.spec_extras = {
       :extensions => ["ext/nokogiri/extconf.rb"],
-      :required_ruby_version => '>= 1.9.3'
+      :required_ruby_version => '>= 2.1.0'
     }
   end
 
@@ -190,6 +180,7 @@ if java?
     ext.target_version = '1.6'
     jars = ["#{jruby_home}/lib/jruby.jar"] + FileList['lib/*.jar']
     ext.classpath = jars.map { |x| File.expand_path x }.join ':'
+    ext.debug = true if ENV['JAVA_DEBUG']
   end
 
   task gem_build_path => [:compile] do
@@ -202,7 +193,6 @@ else
     Rake::ExtensionCompiler.mingw_host
     mingw_available = true
   rescue
-    puts "WARNING: cross compilation not available: #{$!}"
     mingw_available = false
   end
   require "rake/extensiontask"
@@ -213,10 +203,10 @@ else
 
   task gem_build_path do
     %w[libxml2 libxslt].each do |lib|
-      version = dependencies[lib]
+      version = dependencies[lib]["version"]
       archive = File.join("ports", "archives", "#{lib}-#{version}.tar.gz")
       add_file_to_gem archive
-      patchesdir = File.join("ports", "patches", lib)
+      patchesdir = File.join("patches", lib)
       patches = `#{['git', 'ls-files', patchesdir].shelljoin}`.split("\n").grep(/\.patch\z/)
       patches.each { |patch|
         add_file_to_gem patch
@@ -238,7 +228,12 @@ else
       ext.cross_platform = CROSS_RUBIES.map(&:platform).uniq
       ext.cross_config_options << "--enable-cross-build"
       ext.cross_compiling do |spec|
-        libs = dependencies.map { |name, version| "#{name}-#{version}" }.join(', ')
+        libs = dependencies.map { |name, dep| "#{name}-#{dep["version"]}" }.join(', ')
+
+        spec.required_ruby_version = [
+          '>= 2.1.0',
+          "< #{CROSS_RUBIES.max_by(&:ver).minor_ver.succ}"
+        ]
 
         spec.post_install_message = <<-EOS
 Nokogiri is built with the packaged libraries: #{libs}.
@@ -294,10 +289,11 @@ task :debug do
   ENV['CFLAGS'] += " -DDEBUG"
 end
 
-require 'tasks/test'
+require File.join File.dirname(__FILE__), 'tasks/test'
 
 task :java_debug do
-  ENV['JAVA_OPTS'] = '-Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y' if java? && ENV['JAVA_DEBUG']
+  ENV['JRUBY_OPTS'] = "#{ENV['JRUBY_OPTS']} --debug --dev"
+  ENV['JAVA_OPTS'] = '-Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y' if ENV['JAVA_DEBUG']
 end
 
 if java?
@@ -317,6 +313,24 @@ if Hoe.plugins.include?(:debugging)
     Rake::Task["test:#{task_name}"].prerequisites << :compile
   end
 end
+
+task "test:libxml-ruby" do
+  ENV['TEST_NOKOGIRI_WITH_LIBXML_RUBY'] = "1"
+  warn "#{__FILE__}:#{__LINE__}: --- running tests with libxml-ruby loaded ---"
+  Rake::Task[:test].execute
+  ENV['TEST_NOKOGIRI_WITH_LIBXML_RUBY'] = nil
+end
+
+Rake::Task["test:libxml-ruby"].prerequisites << :compile
+
+task "test:valgrind:libxml-ruby" do
+  ENV['TEST_NOKOGIRI_WITH_LIBXML_RUBY'] = "1"
+  warn "#{__FILE__}:#{__LINE__}: --- running tests with libxml-ruby loaded ---"
+  Rake::Task["test:valgrind"].execute
+  ENV['TEST_NOKOGIRI_WITH_LIBXML_RUBY'] = nil
+end
+
+Rake::Task["test:valgrind:libxml-ruby"].prerequisites << :compile
 
 # ----------------------------------------
 
@@ -351,6 +365,9 @@ task :cross do
 end
 
 desc "build a windows gem without all the ceremony."
-task "gem:windows" => %w[cross native gem]
+task "gem:windows" do
+  require "rake_compiler_dock"
+  RakeCompilerDock.sh "bundle && rake cross native gem MAKE='nice make -j`nproc`' RUBY_CC_VERSION=#{ENV['RUBY_CC_VERSION']}"
+end
 
 # vim: syntax=Ruby

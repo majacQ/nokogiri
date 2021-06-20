@@ -49,6 +49,15 @@ module Nokogiri
         #   end
         # end
 
+
+        before do
+          @doc  = Nokogiri::XML "<root><a1>First node</a1><a2>Second node</a2><a3>Third <bx />node</a3></root>"
+          @doc2 = @doc.dup
+          @fragment_string = "<b1>foo</b1><b2>bar</b2>"
+          @fragment        = Nokogiri::XML::DocumentFragment.parse @fragment_string
+          @node_set        = Nokogiri::XML("<root><b1>foo</b1><b2>bar</b2></root>").xpath("/root/node()")
+        end
+
         {
           :add_child            => {:target => "/root/a1",        :returns_self => false, :children_tags => %w[text b1 b2]},
           :<<                   => {:target => "/root/a1",        :returns_self => true, :children_tags => %w[text b1 b2]},
@@ -67,15 +76,6 @@ module Nokogiri
           :next=                => {:target => "/root/a1/text()", :returns_self => false, :children_tags => %w[text b1 b2]},
           :after                => {:target => "/root/a1/text()", :returns_self => true,  :children_tags => %w[text b1 b2]}
         }.each do |method, params|
-
-          before do
-            @doc  = Nokogiri::XML "<root><a1>First node</a1><a2>Second node</a2><a3>Third <bx />node</a3></root>"
-            @doc2 = @doc.dup
-            @fragment_string = "<b1>foo</b1><b2>bar</b2>"
-            @fragment        = Nokogiri::XML::DocumentFragment.parse @fragment_string
-            @node_set        = Nokogiri::XML("<root><b1>foo</b1><b2>bar</b2></root>").xpath("/root/node()")
-          end
-
           describe "##{method}" do
             describe "passed a Node" do
               [:current, :another].each do |which|
@@ -215,7 +215,7 @@ module Nokogiri
             end
           end
 
-          describe "given a parent node with a non-default namespace" do
+          describe "given a parent node with a default and non-default namespace" do
             before do
               @doc = Nokogiri::XML(<<-eoxml)
                 <root xmlns="http://tenderlovemaking.com/" xmlns:foo="http://flavorjon.es/">
@@ -223,18 +223,156 @@ module Nokogiri
                   </first>
                 </root>
               eoxml
+              assert @node = @doc.at('//xmlns:first')
+              @child = Nokogiri::XML::Node.new('second', @doc)
             end
 
-            describe "and a child node with a namespace matching the parent's non-default namespace" do
-              it "inserts a node that inherits the matching parent namespace" do
-                assert node = @doc.at('//xmlns:first')
-                child = Nokogiri::XML::Node.new('second', @doc)
+            describe "and a child with a namespace matching the parent's default namespace" do
+              describe "and as the default prefix" do
+                before do
+                  @ns = @child.add_namespace(nil, 'http://tenderlovemaking.com/')
+                  @child.namespace = @ns
+                end
 
-                ns = @doc.root.namespace_definitions.detect { |x| x.prefix == "foo" }
-                child.namespace = ns
+                it "inserts a node that inherits the parent's default namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://tenderlovemaking.com/")
+                  assert reparented.namespace_definitions.empty?
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     => "http://tenderlovemaking.com/",
+                      "xmlns:foo" => "http://flavorjon.es/",
+                    },
+                    reparented.namespaces)
+                end
+              end
 
-                node.add_child(child)
-                assert @doc.at('//foo:second', "foo" => "http://flavorjon.es/")
+              describe "but with a different prefix" do
+                before do
+                  @ns = @child.add_namespace("baz", 'http://tenderlovemaking.com/')
+                  @child.namespace = @ns
+                end
+
+                it "inserts a node that uses its own namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://tenderlovemaking.com/")
+                  assert reparented.namespace_definitions.include?(@ns)
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     => "http://tenderlovemaking.com/",
+                      "xmlns:foo" => "http://flavorjon.es/",
+                      "xmlns:baz" => "http://tenderlovemaking.com/",
+                    },
+                    reparented.namespaces)
+                end
+              end
+            end
+
+            describe "and a child with a namespace matching the parent's non-default namespace" do
+              describe "set by #namespace=" do
+                before do
+                  @ns = @doc.root.namespace_definitions.detect { |x| x.prefix == "foo" }
+                  @child.namespace = @ns
+                end
+
+                it "inserts a node that inherits the matching parent namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://flavorjon.es/")
+                  assert reparented.namespace_definitions.empty?
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     => "http://tenderlovemaking.com/",
+                      "xmlns:foo" => "http://flavorjon.es/",
+                    },
+                    reparented.namespaces)
+                end
+              end
+
+              describe "with the same prefix" do
+                before do
+                  @ns = @child.add_namespace("foo", 'http://flavorjon.es/')
+                  @child.namespace = @ns
+                end
+
+                it "inserts a node that uses the parent's namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://flavorjon.es/")
+                  assert reparented.namespace_definitions.empty?
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     => "http://tenderlovemaking.com/",
+                      "xmlns:foo" => "http://flavorjon.es/",
+                    },
+                    reparented.namespaces)
+                end
+              end
+
+              describe "as the default prefix" do
+                before do
+                  @ns = @child.add_namespace(nil, 'http://flavorjon.es/')
+                  @child.namespace = @ns
+                end
+
+                it "inserts a node that keeps its namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://flavorjon.es/")
+                  assert reparented.namespace_definitions.include?(@ns)
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     => "http://flavorjon.es/",
+                      "xmlns:foo" => "http://flavorjon.es/",
+                    },
+                    reparented.namespaces)
+                end
+              end
+
+              describe "but with a different prefix" do
+                before do
+                  @ns = @child.add_namespace('baz', 'http://flavorjon.es/')
+                  @child.namespace = @ns
+                end
+
+                it "inserts a node that keeps its namespace" do
+                  @node.add_child(@child)
+                  assert reparented = @doc.at('//bar:second', "bar" => "http://flavorjon.es/")
+                  assert reparented.namespace_definitions.include?(@ns)
+                  assert_equal @ns, reparented.namespace
+                  assert_equal(
+                    {
+                      "xmlns"     =>"http://tenderlovemaking.com/",
+                      "xmlns:foo" =>"http://flavorjon.es/",
+                      "xmlns:baz" =>"http://flavorjon.es/",
+                    },
+                    reparented.namespaces)
+                end
+              end
+            end
+
+            describe "and a child node with a default namespace not matching the parent's default namespace and a namespace matching a parent namespace but with a different prefix" do
+              before do
+                @ns = @child.add_namespace(nil, 'http://example.org/')
+                @child.namespace = @ns
+                @ns2 = @child.add_namespace('baz', 'http://tenderlovemaking.com/')
+              end
+
+              it "inserts a node that keeps its namespace" do
+                @node.add_child(@child)
+                assert reparented = @doc.at('//bar:second', "bar" => "http://example.org/")
+                assert reparented.namespace_definitions.include?(@ns)
+                assert reparented.namespace_definitions.include?(@ns2)
+                assert_equal @ns, reparented.namespace
+                assert_equal(
+                  {
+                    "xmlns"     => "http://example.org/",
+                    "xmlns:foo" => "http://flavorjon.es/",
+                    "xmlns:baz" => "http://tenderlovemaking.com/",
+                  },
+                  reparented.namespaces)
               end
             end
           end
@@ -366,6 +504,43 @@ module Nokogiri
               saved_nodes.each { |child| child.inspect } # try to cause a crash
               assert_equal result, doc.at_xpath("/root/text()").inner_text
             end
+          end
+        end
+
+        describe "reparenting into another document" do
+          it "correctly sets default namespace of a reparented node" do
+            # issue described in #391
+            # thanks to Nick Canzoneri @nickcanz for this test case!
+            source_doc = Nokogiri::XML <<-EOX
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product>
+        <Package />
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Component>
+                <File />
+            </Component>
+        </Directory>
+    </Product>
+</Wix>
+EOX
+
+            dest_doc = Nokogiri::XML <<-EOX
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+  <Fragment Id='MSIComponents'>
+      <DirectoryRef Id='InstallDir'>
+      </DirectoryRef>
+  </Fragment>
+</Wix>
+EOX
+
+            stuff = source_doc.at_css("Directory[Id='TARGETDIR']")
+            insert_point = dest_doc.at_css("DirectoryRef[Id='InstallDir']")
+            insert_point.children = stuff.children()
+
+            assert_no_match(/default:/, insert_point.children.to_xml)
+            assert_match(/<Component>/, insert_point.children.to_xml)
           end
         end
       end

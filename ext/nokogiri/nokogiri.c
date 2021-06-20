@@ -28,24 +28,15 @@ int vasprintf (char **strp, const char *fmt, va_list ap)
 }
 #endif
 
-#ifdef USING_SYSTEM_ALLOCATOR_LIBRARY /* Ruby Enterprise Edition with tcmalloc */
-void vasprintf_free (void *p)
-{
-  system_free(p);
-}
-#else
 void vasprintf_free (void *p)
 {
   free(p);
 }
-#endif
 
 #ifdef HAVE_RUBY_UTIL_H
 #include "ruby/util.h"
 #else
-#ifndef __MACRUBY__
 #include "util.h"
-#endif
 #endif
 
 void nokogiri_root_node(xmlNodePtr node)
@@ -70,14 +61,12 @@ void nokogiri_root_nsdef(xmlNsPtr ns, xmlDocPtr doc)
 
 void Init_nokogiri()
 {
-#ifndef __MACRUBY__
   xmlMemSetup(
       (xmlFreeFunc)ruby_xfree,
       (xmlMallocFunc)ruby_xmalloc,
       (xmlReallocFunc)ruby_xrealloc,
       ruby_strdup
   );
-#endif
 
   mNokogiri         = rb_define_module("Nokogiri");
   mNokogiriXml      = rb_define_module_under(mNokogiri, "XML");

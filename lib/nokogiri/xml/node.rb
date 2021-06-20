@@ -1,3 +1,4 @@
+# encoding: UTF-8
 require 'stringio'
 require 'nokogiri/xml/node/save_options'
 
@@ -31,6 +32,22 @@ module Nokogiri
     # * Nokogiri::XML::Node#children
     # * Nokogiri::XML::Node#next
     # * Nokogiri::XML::Node#previous
+    #
+    #
+    # When printing or otherwise emitting a document or a node (and
+    # its subtree), there are a few methods you might want to use:
+    #
+    # * content, text, inner_text, to_str: emit plaintext
+    #
+    #   These methods will all emit the plaintext version of your
+    #   document, meaning that entities will be replaced (e.g., "&lt;"
+    #   will be replaced with "<"), meaning that any sanitizing will
+    #   likely be un-done in the output.
+    #
+    # * to_s, to_xml, to_html, inner_html: emit well-formed markup
+    #
+    #   These methods will all emit properly-escaped markup, meaning
+    #   that it's suitable for consumption by browsers, parsers, etc.
     #
     # You may search this node's subtree using Searchable#xpath and Searchable#css
     class Node
@@ -315,13 +332,13 @@ module Nokogiri
       ###
       # Get the attribute values for this Node.
       def values
-        attribute_nodes.map { |node| node.value }
+        attribute_nodes.map(&:value)
       end
 
       ###
       # Get the attribute names for this Node.
       def keys
-        attribute_nodes.map { |node| node.node_name }
+        attribute_nodes.map(&:node_name)
       end
 
       ###
@@ -335,7 +352,9 @@ module Nokogiri
       ###
       # Remove the attribute named +name+
       def remove_attribute name
-        attributes[name].remove if key? name
+        attr = attributes[name].remove if key? name
+        clear_xpath_context if Nokogiri.jruby?
+        attr
       end
       alias :delete :remove_attribute
 
@@ -368,7 +387,7 @@ module Nokogiri
         end
 
         options ||= (document.html? ? ParseOptions::DEFAULT_HTML : ParseOptions::DEFAULT_XML)
-        if Fixnum === options
+        if Integer === options
           options = Nokogiri::XML::ParseOptions.new(options)
         end
         # Give the options to the user
@@ -421,12 +440,6 @@ module Nokogiri
       def namespaces
         Hash[namespace_scopes.map { |nd|
           key = ['xmlns', nd.prefix].compact.join(':')
-          if RUBY_VERSION >= '1.9' && document.encoding
-            begin
-              key.force_encoding document.encoding
-            rescue ArgumentError
-            end
-          end
           [key, nd.href]
         }]
       end
@@ -528,9 +541,10 @@ module Nokogiri
         return NodeSet.new(document, parents) unless selector
 
         root = parents.last
+        search_results = root.search(selector)
 
         NodeSet.new(document, parents.find_all { |parent|
-          root.search(selector).include?(parent)
+          search_results.include?(parent)
         })
       end
 
@@ -725,7 +739,7 @@ module Nokogiri
       # Nokogiri::XML::ParseOptions object initialized from +options+, will be
       # passed to it, allowing more convenient modification of the parser options.
       def do_xinclude options = XML::ParseOptions::DEFAULT_XML, &block
-        options = Nokogiri::XML::ParseOptions.new(options) if Fixnum === options
+        options = Nokogiri::XML::ParseOptions.new(options) if Integer === options
 
         # give options to user
         yield options if block_given?

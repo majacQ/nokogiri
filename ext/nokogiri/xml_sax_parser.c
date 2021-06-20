@@ -9,9 +9,6 @@ static ID id_comment, id_characters, id_xmldecl, id_error, id_warning;
 static ID id_cdata_block, id_cAttribute;
 static ID id_processing_instruction;
 
-#define STRING_OR_NULL(str) \
-   (RTEST(str) ? StringValuePtr(str) : NULL)
-
 static void start_document(void * ctx)
 {
   VALUE self = NOKOGIRI_SAX_SELF(ctx);
@@ -21,16 +18,16 @@ static void start_document(void * ctx)
 
   if(NULL != ctxt && ctxt->html != 1) {
     if(ctxt->standalone != -1) {  /* -1 means there was no declaration */
-      VALUE encoding = ctxt->encoding ?
-        NOKOGIRI_STR_NEW2(ctxt->encoding) :
-        Qnil;
+      VALUE encoding = Qnil ;
+      if (ctxt->encoding) {
+        encoding = NOKOGIRI_STR_NEW2(ctxt->encoding) ;
+      } else if (ctxt->input && ctxt->input->encoding) {
+        encoding = NOKOGIRI_STR_NEW2(ctxt->input->encoding) ;
+      }
 
-      VALUE version = ctxt->version ?
-        NOKOGIRI_STR_NEW2(ctxt->version) :
-        Qnil;
+      VALUE version = ctxt->version ? NOKOGIRI_STR_NEW2(ctxt->version) : Qnil;
 
       VALUE standalone = Qnil;
-
       switch(ctxt->standalone)
       {
         case 0:
@@ -160,7 +157,7 @@ start_element_ns (
 }
 
 /**
- * end_element_ns was borrowed heavily from libxml-ruby. 
+ * end_element_ns was borrowed heavily from libxml-ruby.
  */
 static void
 end_element_ns (
@@ -172,7 +169,7 @@ end_element_ns (
   VALUE self = NOKOGIRI_SAX_SELF(ctx);
   VALUE doc = rb_iv_get(self, "@document");
 
-  rb_funcall(doc, id_end_element_namespace, 3, 
+  rb_funcall(doc, id_end_element_namespace, 3,
     NOKOGIRI_STR_NEW2(localname),
     RBSTR_OR_QNIL(prefix),
     RBSTR_OR_QNIL(uri)

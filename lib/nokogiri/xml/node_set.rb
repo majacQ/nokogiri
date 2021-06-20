@@ -70,7 +70,7 @@ module Nokogiri
       #
       # For more information see Nokogiri::XML::Searchable#css
       def css *args
-        rules, handler, ns, binds = extract_params(args)
+        rules, handler, ns, _ = extract_params(args)
 
         inject(NodeSet.new(document)) do |set, node|
           set += css_internal node, rules, handler, ns
@@ -190,8 +190,19 @@ module Nokogiri
 
       ###
       # Get the inner text of all contained Node objects
+      #
+      # Note: This joins the text of all Node objects in the NodeSet:
+      #
+      #    doc = Nokogiri::XML('<xml><a><d>foo</d><d>bar</d></a></xml>')
+      #    doc.css('d').text # => "foobar"
+      #
+      # Instead, if you want to return the text of all nodes in the NodeSet:
+      #
+      #    doc.css('d').map(&:text) # => ["foo", "bar"]
+      #
+      # See Nokogiri::XML::Node#content for more information.
       def inner_text
-        collect{|j| j.inner_text}.join('')
+        collect(&:inner_text).join('')
       end
       alias :text :inner_text
 
@@ -215,7 +226,7 @@ module Nokogiri
       ###
       # Convert this NodeSet to a string.
       def to_s
-        map { |x| x.to_s }.join
+        map(&:to_s).join
       end
 
       ###
@@ -296,7 +307,7 @@ module Nokogiri
       ###
       # Return a nicely formated string representation
       def inspect
-        "[#{map { |c| c.inspect }.join ', '}]"
+        "[#{map(&:inspect).join ', '}]"
       end
 
       alias :+ :|

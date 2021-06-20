@@ -385,7 +385,7 @@ module Nokogiri
 
       def test_whitespace_nodes
         doc = Nokogiri::XML.parse("<root><b>Foo</b>\n<i>Bar</i> <p>Bazz</p></root>")
-        children = doc.at('.//root').children.collect{|j| j.to_s}
+        children = doc.at('.//root').children.collect(&:to_s)
         assert_equal "\n", children[1]
         assert_equal " ", children[3]
       end
@@ -421,6 +421,19 @@ module Nokogiri
         new_node = Nokogiri::XML.parse('<foo>bar</foo>')
         old_node = @node.at('.//employee')
         assert_raises(ArgumentError){ old_node.replace new_node }
+      end
+
+      def test_unlink_on_unlinked_node_1
+        node = Nokogiri::XML::Node.new 'div', Nokogiri::XML::Document.new
+        node.unlink # must_not_raise
+        assert_nil node.parent
+      end
+
+      def test_unlink_on_unlinked_node_2
+        node = Nokogiri::XML('<div>foo</div>').at_css("div")
+        node.unlink
+        node.unlink # must_not_raise
+        assert_nil node.parent
       end
     end
   end

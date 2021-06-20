@@ -18,16 +18,12 @@ ext/java/Canna
 ext/java/nokogiri/**/*.class
 ext/nokogiri/*.dll
 gems
-lib/nokogiri/1.8
-lib/nokogiri/1.9
 lib/nokogiri/nokogiri.bundle
 lib/nokogiri/nokogiri.jar
 lib/nokogiri/nokogiri.rb
 lib/nokogiri/nokogiri.so
 pkg
-ports/archives
-ports/*-*-*
-ports/*.installed
+ports
 stash
 tags
 test/*/*_mini.rb

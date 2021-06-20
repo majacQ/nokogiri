@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.cyberneko.html.HTMLElements;
 import org.jruby.Ruby;
 import org.jruby.RubyArray;
 import org.jruby.RubyClass;
@@ -53,6 +54,24 @@ import org.jruby.runtime.load.BasicLibraryService;
  * @author Yoko Harada <yokolet@gmail.com>
  */
 public class NokogiriService implements BasicLibraryService {
+
+    // nekohtml from version 1.9.13 they autocomplete tbody around
+    // tr tags of a table - http://sourceforge.net/p/nekohtml/code/241/
+    // this monkey patch undoes this autocompletion
+    static class MonkeyPatchHTMLElements extends HTMLElements {
+        static void patchIt() {
+            Element[] array = ELEMENTS_ARRAY['T'-'A'];
+            for(int i = 0; i < array.length; i++) {
+                if (array[i].name.equals("TR")) {
+                    array[i] = new Element(TR, "TR", Element.BLOCK, TABLE, new short[]{TD,TH,TR,COLGROUP,DIV});
+                }
+            }
+        }
+    }
+    static {
+        MonkeyPatchHTMLElements.patchIt();
+    }
+
     public static final String nokogiriClassCacheGvarName = "$NOKOGIRI_CLASS_CACHE";
 
     public boolean basicLoad(Ruby ruby) {
@@ -227,6 +246,9 @@ public class NokogiriService implements BasicLibraryService {
         
         RubyClass xmlSaxPushParser = xmlSaxModule.defineClassUnder("PushParser", ruby.getObject(), XML_SAXPUSHPARSER_ALLOCATOR);
         xmlSaxPushParser.defineAnnotatedMethods(XmlSaxPushParser.class);
+        
+        RubyClass htmlSaxPushParser = htmlSaxModule.defineClassUnder("PushParser", ruby.getObject(), HTML_SAXPUSHPARSER_ALLOCATOR);
+        htmlSaxPushParser.defineAnnotatedMethods(HtmlSaxPushParser.class);
         
         RubyClass htmlSaxParserContext = htmlSaxModule.defineClassUnder("ParserContext", xmlSaxParserContext, HTML_SAXPARSER_CONTEXT_ALLOCATOR);
         htmlSaxParserContext.defineAnnotatedMethods(HtmlSaxParserContext.class);
@@ -534,6 +556,12 @@ public class NokogiriService implements BasicLibraryService {
     private static ObjectAllocator XML_SAXPUSHPARSER_ALLOCATOR = new ObjectAllocator() {
         public IRubyObject allocate(Ruby runtime, RubyClass klazz) {
             return new XmlSaxPushParser(runtime, klazz);
+        }
+    };
+    
+    private static ObjectAllocator HTML_SAXPUSHPARSER_ALLOCATOR = new ObjectAllocator() {
+        public IRubyObject allocate(Ruby runtime, RubyClass klazz) {
+            return new HtmlSaxPushParser(runtime, klazz);
         }
     };
 

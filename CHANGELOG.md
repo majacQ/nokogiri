@@ -1,46 +1,284 @@
-=== 1.?.? / unreleased
+# 1.7.2 / 2017-05-09
 
-==== Features
+## Security Notes
+
+[MRI] Upstream libxslt patches are applied to the vendored libxslt 1.1.29 which address CVE-2017-5029 and CVE-2016-4738.
+
+For more information:
+
+* https://github.com/sparklemotion/nokogiri/issues/1634
+* http://people.canonical.com/~ubuntu-security/cve/2017/CVE-2017-5029.html
+* http://people.canonical.com/~ubuntu-security/cve/2016/CVE-2016-4738.html
+
+
+# 1.7.1 / unreleased
+
+## Security Notes
+
+[MRI] Upstream libxml2 patches are applied to the vendored libxml 2.9.4 which address CVE-2016-4658 and CVE-2016-5131.
+
+For more information:
+
+* https://github.com/sparklemotion/nokogiri/issues/1615
+* http://people.canonical.com/~ubuntu-security/cve/2016/CVE-2016-4658.html
+* http://people.canonical.com/~ubuntu-security/cve/2016/CVE-2016-5131.html
+
+
+## Dependencies
+
+* [Windows] Upgrade zlib from 1.2.8 to 1.2.11 (unless --use-system-libraries)
+
+
+# 1.7.0.1 / 2017-01-04
+
+## Bugs
+
+* Fix OpenBSD support. (#1569) (related to #1543)
+
+
+# 1.7.0 / 2016-12-26
+
+## Features
+
+* Remove deprecation warnings in Ruby 2.4.0 (#1545) (Thanks, @matthewd!)
+* Support egcc compiler on OpenBSD (#1543) (Thanks, @frenkel and @knu!)
+
+
+## Backwards incompatibilities.
+
+This release ends support for:
+
+* Ruby 1.9.2, for which official support ended on 2014-07-31
+* Ruby 1.9.3, for which official support ended on 2015-02-23
+* Ruby 2.0.0, for which official support ended on 2016-02-24
+* MacRuby, which hasn't been actively supported since 2015-01-13 (see https://github.com/MacRuby/MacRuby/commit/f76b9d6e99c18236db617e8aceb12c27d593a483)
+
+
+# 1.6.8.1 / 2016-10-03
+
+## Dependency License Notes
+
+Removes required dependency on the `pkg-config` gem. This dependency
+was introduced in v1.6.8 and, because it's distributed under LGPL, was
+objectionable to many Nokogiri users (#1488, #1496).
+
+This version makes `pkg-config` an optional dependency. If it's
+installed, it's used; but otherwise Nokogiri will attempt to work
+around its absence.
+
+
+# 1.6.8 / 2016-06-06
+
+## Security Notes
+
+[MRI] Bundled libxml2 is upgraded to 2.9.4, which fixes many security issues. Many of these had previously been patched in the vendored libxml 2.9.2 in the 1.6.7.x branch, but some are newer.
+
+See these libxml2 email posts for more:
+
+* https://mail.gnome.org/archives/xml/2015-November/msg00012.html
+* https://mail.gnome.org/archives/xml/2016-May/msg00023.html
+
+For a more detailed analysis, you may care to read Canonical's take on these security issues:
+
+* http://www.ubuntu.com/usn/usn-2994-1
+
+
+[MRI] Bundled libxslt is upgraded to 1.1.29, which fixes a security issue as well as many long-known outstanding bugs, some features, some portability improvements, and general cleanup.
+
+See this libxslt email post for more:
+
+* https://mail.gnome.org/archives/xslt/2016-May/msg00004.html
+
+
+## Features
+
+Several changes were made to improve performance:
+
+* [MRI] Simplify NodeSet#to_a with a minor speed-up. (#1397)
+* XML::Node#ancestors optimization. (#1297) (Thanks, Bruno Sutic!)
+* Use Symbol#to_proc where we weren't previously. (#1296) (Thanks, Bruno Sutic!)
+* XML::DTD#each uses implicit block calls. (Thanks, @glaucocustodio!)
+* Fall back to the `pkg-config` gem if we're having trouble finding the system libxml2. This should help many FreeBSD users. (#1417)
+* Set document encoding appropriately even on blank document. (#1043) (Thanks, @batter!)
+
+
+## Bug Fixes
+
+* [JRuby] fix slow add_child (#692)
+* [JRuby] fix load errors when deploying to JRuby/Torquebox (#1114) (Thanks, @atambo and @jvshahid!)
+* [JRuby] fix NPE when inspecting nodes returned by NodeSet#drop (#1042) (Thanks, @mkristian!)
+* [JRuby] fix nil attriubte node's namespace in reader (#1327) (Thanks, @codekitchen!)
+* [JRuby] fix Nokogiri munging unicode characters that require more than 2 bytes (#1113) (Thanks, @mkristian!)
+* [JRuby] allow unlinking an unparented node (#1112, #1152) (Thanks, @esse!)
+* [JRuby] allow Fragment parsing on a frozen string (#444, #1077)
+* [JRuby] HTML `style` tags are no longer encoded (#1316) (Thanks, @tbeauvais!)
+* [MRI] fix assertion failure while accessing attribute node's namespace in reader (#843) (Thanks, @2potatocakes!)
+* [MRI] fix issue with GCing namespace nodes returned in an xpath query. (#1155)
+* [MRI] Ensure C strings are null-terminated. (#1381)
+* [MRI] Ensure Rubygems is loaded before using mini_portile2 at installation. (#1393, #1411) (Thanks, @JonRowe!)
+* [MRI] Handling another edge case where the `libxml-ruby` gem's global callbacks were smashing the heap. (#1426). (Thanks to @bbergstrom for providing an isolated test case!)
+* [MRI] Ensure encodings are passed to Sax::Parser xmldecl callback. (#844)
+* [MRI] Ensure default ns prefix is applied correctly when reparenting nodes to another document. (#391) (Thanks, @ylecuyer!)
+* [MRI] Ensure Reader handles non-existent attributes as expected. (#1254) (Thanks, @ccutrer!)
+* [MRI] Cleanup around namespace handling when reparenting nodes. (#1332, #1333, #1444) (Thanks, @cuttrer and @bradleybeddoes!)
+* unescape special characters in CSS queries (#1303) (Thanks, @twalpole!)
+* consistently handle empty documents (#1349)
+* Update to mini_portile2 2.1.0 to address whitespace-handling during patching. (#1402)
+* Fix encoding of xml node namespaces.
+* Work around issue installing Nokogiri on overlayfs (commonly used in Docker containers). (#1370, #1405)
+
+
+
+## Other Notes
+
+* Removed legacy code remaining from Ruby 1.8.x support.
+* Removed legacy code remaining from REE support.
+* Removing hacky workarounds for bugs in some older versions of libxml2.
+* Handling C strings in a forward-compatible manner, see https://github.com/ruby/ruby/blob/v2_2_0/NEWS#L319
+
+
+# 1.6.7.2 / 2016-01-20
+
+This version pulls in several upstream patches to the vendored libxml2 and libxslt to address:
+
+  CVE-2015-7499
+
+Ubuntu classifies this as "Priority: Low", RedHat classifies this as "Impact: Moderate", and NIST classifies this as "Severity: 5.0 (MEDIUM)".
+
+MITRE record is https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-7499
+
+
+# 1.6.7.1 / 2015-12-16
+
+This version pulls in several upstream patches to the vendored libxml2 and libxslt to address:
+
+  CVE-2015-5312
+  CVE-2015-7497
+  CVE-2015-7498
+  CVE-2015-7499
+  CVE-2015-7500
+  CVE-2015-8241
+  CVE-2015-8242
+  CVE-2015-8317
+
+See also http://www.ubuntu.com/usn/usn-2834-1/
+
+
+# 1.6.7 / 2015-11-29
+
+## Notes
+
+This version supports native builds on Windows using the RubyInstaller
+DevKit. It also supports Ruby 2.2.x on Windows, as well as making
+several other improvements to the installation process on various
+platforms.
+
+This version also includes the security patches already applied in
+v1.6.6.3 and v1.6.6.4 to the vendored libxml2 and libxslt source.
+See #1374 and #1376 for details.
+
+## Features
+
+* Cross-built gems now have a proper ruby version requirement. (#1266)
+* Ruby 2.2.x is supported on Windows.
+* Native build is supported on Windows.
+* [MRI] libxml2 and libxslt `config.guess` files brought up to date. (#1326) (Thanks, @hernan-erasmo!)
+* [JRuby] fix error in validating files with jruby (#1355, #1361) (Thanks, @twalpole!)
+* [MRI, OSX] Patch to handle nonstandard location of `iconv.h`. (#1206, #1210, #1218, #1345) (Thanks, @neonichu!)
+
+## Bug Fixes
+
+* [JRuby] reset the namespace cache when replacing the document's innerHtml (#1265) (Thanks, @mkristian!)
+* [JRuby] Document#parse should support IO objects that respond to #read. (#1124) (Thanks, Jake Byman!)
+* [MRI] Duplicate-id errors when setting the `id` attribute on HTML documents are now silenced. (#1262)
+* [JRuby] SAX parser cuts texts in pieces when square brackets exist. (#1261)
+* [JRuby] Namespaced attributes aren't removed by remove_attribute. (#1299)
+
+
+# 1.6.6.4 / 2015-11-19
+
+This version pulls in an upstream patch to the vendored libxml2 to address:
+
+* unclosed comment uninitialized access issue (#1376)
+
+This issue was assigned CVE-2015-8710 after the fact. See http://seclists.org/oss-sec/2015/q4/616 for details.
+
+
+# 1.6.6.3 / 2015-11-16
+
+This version pulls in several upstream patches to the vendored libxml2 and libxslt to address:
+
+* CVE-2015-1819
+* CVE-2015-7941_1
+* CVE-2015-7941_2
+* CVE-2015-7942
+* CVE-2015-7942-2
+* CVE-2015-8035
+* CVE-2015-7995
+
+See #1374 for details.
+
+
+# 1.6.6.2 / 2015-01-23
+
+## Bug fixes
+
+* Fixed installation issue affecting compiler arguments. (#1230)
+
+
+# 1.6.6.1 / 2015-01-22
+
+Note that 1.6.6.0 was not released.
+
+
+## Features
 
 * Unified Node and NodeSet implementations of #search, #xpath and #css.
 * Added Node#lang and Node#lang=.
+* bin/nokogiri passes the URI to parse() if an HTTP URL is given.
+* bin/nokogiri now loads ~/.nokogirirc so user can define helper methods, etc.
+* bin/nokogiri can be configured to use Pry instead of IRB by adding a couple of lines to ~/.nokogirirc. (#1198)
+* bin/nokogiri can better handle urls from STDIN (aiding use of xargs). (#1065)
+* JRuby 9K support.
 
 
-==== Bug fixes
+## Bug fixes
 
 * DocumentFragment#search now matches against root nodes. (#1205)
+* (MRI) More fixes related to handling libxml2 parse errors during DocumentFragment#dup. (#1196)
+* (JRuby) Builder now handles namespace hrefs properly when there is a default ns. (#1039)
+* (JRuby) Clear the XPath cache on attr removal. (#1109)
+* `XML::Comment.new` argument types are now consistent and safe (and documented) across MRI and JRuby. (#1224)
+* (MRI) Restoring support for Ruby 1.9.2 that was broken in v1.6.4.1 and v1.6.5. (#1207)
+* Check if `zlib` is available before building `libxml2`. (#1188)
+* (JRuby) HtmlSaxPushParser now exists. (#1147) (Thanks, Piotr Szmielew!)
 
 
-==== Compatibility Note
+# 1.6.5 / 2014-11-26
 
-The requirement for Ruby >=1.9.3 is now forced via gemspec. (#1207)
-
-
-=== 1.6.5 / 2014-11-26
-
-==== Features
+## Features
 
 * Implement Slop#respond_to_missing?. (#1176)
 * Optimized the XPath query generated by an `an+b` CSS query.
 
 
-==== Bug fixes
+## Bug fixes
 
 * Capture non-parse errors from Document#dup in Document#errors. (#1196)
 * (JRuby) Document#canonicalize parameters are now consistent with MRI. (#1189)
 
 
-=== 1.6.4.1 / 2014-11-05
+# 1.6.4.1 / 2014-11-05
 
-==== Bug fixes
+## Bug fixes
 
 * (MRI) Fix a bug where CFLAGS passed in are dropped. (#1188)
 * Fix a bug where CSS selector :nth(n) did not work. (#1187)
 
 
-=== 1.6.4 / 2014-11-04
+# 1.6.4 / 2014-11-04
 
-==== Features
+## Features
 
 * (MRI) Bundled Libxml2 is upgraded to 2.9.2.
 * (MRI) `nokogiri --version` will include a list of applied patches.
@@ -48,27 +286,27 @@ The requirement for Ruby >=1.9.3 is now forced via gemspec. (#1207)
 * (MRI) Detect and help user fix a missing /usr/include/iconv.h on OS X. (#1111)
 * (MRI) Improve the iconv detection for building libxml2.
 
-==== Bug fixes
+## Bug fixes
 
 * (MRI) Fix DocumentFragment#element_children (#1138).
 * Fix a bug with CSS attribute selector without any prefix where "foo [bar]" was treated as "foo[bar]". (#1174)
 
 
-=== 1.6.3.1 / 2014-07-21
+# 1.6.3.1 / 2014-07-21
 
-==== Bug fixes
+## Bug fixes
 
 * Addressing an Apple Macintosh installation problem for GCC users. #1130 (Thanks, @zenspider!)
 
 
-=== 1.6.3 / 2014-07-20
+# 1.6.3 / 2014-07-20
 
-==== Features
+## Features
 
 * Added Node#document? and Node#processing_instruction?
 
 
-==== Bug fixes
+## Bug fixes
 
 * [JRuby] Fix Ruby memory exhaustion vulnerability. #1087 (Thanks, @ocher)
 * [MRI] Fix segfault during GC when using `libxml-ruby` and `nokogiri` together in multi-threaded environment. #895 (Thanks, @ender672!)
@@ -77,18 +315,18 @@ The requirement for Ruby >=1.9.3 is now forced via gemspec. (#1207)
 * Processing instructions can now be added via Node#add_next_sibling.
 
 
-=== 1.6.2.1 / 2014-05-13
+# 1.6.2.1 / 2014-05-13
 
-==== Bug fixes
+## Bug fixes
 
 * Fix statically-linked libxml2 installation when using universal builds of Ruby. #1104
 * Patching `mini_portile` to address the git dependency detailed in #1102.
 * Library load fix to address segfault reported on some systems. #1097
 
 
-=== 1.6.2 / 2014-05-12
+# 1.6.2 / 2014-05-12
 
-==== Security Note
+## Security Note
 
 A set of security and bugfix patches have been backported from the libxml2 and libxslt repositories onto the version of 2.8.0 packaged with Nokogiri, including these notable security fixes:
 
@@ -98,11 +336,11 @@ A set of security and bugfix patches have been backported from the libxml2 and l
 
 It is recommended that you upgrade from 1.6.x to this version as soon as possible.
 
-==== Compatibility Note
+## Compatibility Note
 
 Now requires libxml >= 2.6.21 (was previously >= 2.6.17).
 
-==== Features
+## Features
 
 * Add cross building of fat binary gems for 64-Bit Windows (x64-mingw32) and add support for native builds on Windows. #864, #989, #1072
 * (MRI) Alias CP932 to Windows-31J if iconv does not support Windows-31J.
@@ -121,7 +359,7 @@ Now requires libxml >= 2.6.21 (was previously >= 2.6.17).
 * Fix documentation for XML::Node#namespace. #803 #802 (Thanks, Hoylen Sue)
 * Allow Nokogiri::XML::Node#parse from unparented non-element nodes. #407
 
-==== Bugfixes
+## Bugfixes
 
 * Ensure :only-child pseudo class works within :not pseudo class. #858 (Thanks, Yamagishi Kazutoshi!)
 * Don't call pkg_config when using bundled libraries in extconf.rb #931 (Thanks, Shota Fukumori!)
@@ -141,7 +379,7 @@ Now requires libxml >= 2.6.21 (was previously >= 2.6.17).
 * (JRuby) JRuby-Nokogiri has different comment node name #1080
 * (JRuby) JAXPExtensionsProvider / Java 7 / Secure Processing #1070
 
-=== 1.6.1 / 2013-12-14
+# 1.6.1 / 2013-12-14
 
 * Bugfixes
 
@@ -149,7 +387,7 @@ Now requires libxml >= 2.6.21 (was previously >= 2.6.17).
   * (JRuby) Fix regression of billion-laughs vulnerability. #586
 
 
-=== 1.6.0 / 2013-06-08
+# 1.6.0 / 2013-06-08
 
 This release was based on v1.5.10 and 1.6.0.rc1, and contains changes
 mentioned in both.
@@ -159,7 +397,7 @@ mentioned in both.
   * Remove pre 1.9 monitoring from Travis.
 
 
-=== 1.6.0.rc1 / 2013-04-14
+# 1.6.0.rc1 / 2013-04-14
 
 This release was based on v1.5.9, and so does not contain any fixes
 mentioned in the notes for v1.5.10.
@@ -185,7 +423,7 @@ mentioned in the notes for v1.5.10.
   * Support for Ruby 1.8.7 and prior has been dropped
 
 
-=== 1.5.11 / 2013-12-14
+# 1.5.11 / 2013-12-14
 
 * Bugfixes
 
@@ -193,7 +431,7 @@ mentioned in the notes for v1.5.10.
   * (JRuby) Fix regression of billion-laughs vulnerability. #586
 
 
-=== 1.5.10 / 2013-06-07
+# 1.5.10 / 2013-06-07
 
 * Bugfixes
 
@@ -208,7 +446,7 @@ mentioned in the notes for v1.5.10.
   * Fix TypeError when running tests. #900 (Thanks, Cédric Boutillier!)
 
 
-=== 1.5.9 / 2013-03-21
+# 1.5.9 / 2013-03-21
 
 * Bugfixes
 
@@ -217,7 +455,7 @@ mentioned in the notes for v1.5.10.
   * (MRI) Fixed a memory leak in fragment parsing if nodes are not all subsequently reparented. #856
 
 
-=== 1.5.8 / 2013-03-19
+# 1.5.8 / 2013-03-19
 
 * Bugfixes
 
@@ -226,7 +464,7 @@ mentioned in the notes for v1.5.10.
   * Allow use of a prefixed namespace on a root node using Nokogiri::XML::Builder #868
 
 
-=== 1.5.7 / 2013-03-18
+# 1.5.7 / 2013-03-18
 
 * Features
 
@@ -249,7 +487,7 @@ mentioned in the notes for v1.5.10.
   * (MRI) SAX parser handles empty processing instructions. #845
 
 
-=== 1.5.6 / 2012-12-19
+# 1.5.6 / 2012-12-19
 
 * Features
 
@@ -288,7 +526,7 @@ mentioned in the notes for v1.5.10.
   * (JRuby) builder requires textwrappers for valid utf8 in jruby, not in mri. #784
 
 
-=== 1.5.5 / 2012-06-24
+# 1.5.5 / 2012-06-24
 
 * Features
 
@@ -310,7 +548,7 @@ mentioned in the notes for v1.5.10.
   * JRuby's Entity resolving should be consistent with C-Nokogiri #704, #647, #703
 
 
-=== 1.5.4 / 2012-06-12
+# 1.5.4 / 2012-06-12
 
 * Features
 
@@ -336,7 +574,7 @@ mentioned in the notes for v1.5.10.
     Insert your own joke about double-negatives here.
 
 
-=== 1.5.3 / 2012-06-01
+# 1.5.3 / 2012-06-01
 
 * Features
 
@@ -366,12 +604,12 @@ mentioned in the notes for v1.5.10.
   * (JRuby) Concurrency issue in XPath parsing. #682
 
 
-=== 1.5.2 / 2012-03-09
+# 1.5.2 / 2012-03-09
 
 Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, #632.
 
 
-=== 1.5.1 / 2012-03-09
+# 1.5.1 / 2012-03-09
 
 * Features
 
@@ -416,7 +654,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * C14n cleanup and Node#canonicalize (thanks, Ivan Pirlik!) #563
 
 
-=== 1.5.0 / 2011-07-01
+# 1.5.0 / 2011-07-01
 
 * Notes
 
@@ -437,7 +675,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Add support for <meta charset="...">.
 
 
-=== 1.5.0 beta3 / 2010/12/02
+# 1.5.0 beta3 / 2010/12/02
 
 * Notes
 
@@ -449,14 +687,14 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Node#inner_text no longer returns nil. (JRuby) #264
 
 
-=== 1.5.0 beta2 / 2010/07/30
+# 1.5.0 beta2 / 2010/07/30
 
 * Notes
 
   * See changelog from 1.4.3
 
 
-=== 1.5.0 beta1 / 2010/05/22
+# 1.5.0 beta1 / 2010/05/22
 
 * Notes
 
@@ -469,7 +707,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * FFI support is removed.
 
 
-=== 1.4.7 / 2011-07-01
+# 1.4.7 / 2011-07-01
 
 * Bugfixes
 
@@ -478,7 +716,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
     encoding. Thanks, Timothy Elliott (@ender672)! #478
 
 
-=== 1.4.6 / 2011-06-19
+# 1.4.6 / 2011-06-19
 
 * Notes
 
@@ -486,7 +724,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Ruby 1.8.6 support has been restored.
 
 
-=== 1.4.5 / 2011-05-19
+# 1.4.5 / 2011-05-19
 
 * New Features
 
@@ -509,7 +747,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * XML::Reader no longer segfaults when under GC pressure. #439
 
 
-=== 1.4.4 / 2010-11-15
+# 1.4.4 / 2010-11-15
 
 * New Features
 
@@ -536,7 +774,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Fixed NodeSet#wrap on nodes within a fragment. #331
 
 
-=== 1.4.3 / 2010/07/28
+# 1.4.3 / 2010/07/28
 
 * New Features
 
@@ -560,7 +798,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
     "//F//G[preceding-sibling::E]".
 
 
-=== 1.4.2 / 2010/05/22
+# 1.4.2 / 2010/05/22
 
 * New Features
 
@@ -613,7 +851,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
     were bundled.
 
 
-=== 1.4.1 / 2009/12/10
+# 1.4.1 / 2009/12/10
 
 * New Features
 
@@ -645,7 +883,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Fragments containing leading text nodes with newlines now parse properly. GH #178.
 
 
-=== 1.4.0 / 2009/10/30
+# 1.4.0 / 2009/10/30
 
 * Happy Birthday!
 
@@ -688,7 +926,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Hpricot compatibility layer removed
 
 
-=== 1.3.3 / 2009/07/26
+# 1.3.3 / 2009/07/26
 
 * New Features
 
@@ -709,7 +947,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Hpricot compatibility layer will be removed in 1.4.0
 
 
-=== 1.3.2 / 2009-06-22
+# 1.3.2 / 2009-06-22
 
 * New Features
 
@@ -733,7 +971,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
     to Nokogiri::XML::SAX::Document#end_element_namespace
 
 
-=== 1.3.1 / 2009-06-07
+# 1.3.1 / 2009-06-07
 
 * Bugfixes
 
@@ -741,7 +979,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Namespace nodes are added to the Document node cache
 
 
-=== 1.3.0 / 2009-05-30
+# 1.3.0 / 2009-05-30
 
 * New Features
 
@@ -785,7 +1023,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Fixed intolerance of HTML attributes without values in Node#before/after/inner_html=. (GH#35)
 
 
-=== 1.2.3 / 2009-03-22
+# 1.2.3 / 2009-03-22
 
 * Bugfixes
 
@@ -797,7 +1035,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Builder methods take a hash as a second argument
 
 
-=== 1.2.2 / 2009-03-14
+# 1.2.2 / 2009-03-14
 
 * New features
 
@@ -824,7 +1062,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Document should not have a parent method (LH #64)
 
 
-=== 1.2.1 / 2009-02-23
+# 1.2.1 / 2009-02-23
 
 * Bugfixes
 
@@ -832,7 +1070,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Fixed Ruby 1.9 String Encoding (Thanks 角谷さん！)
 
 
-=== 1.2.0 / 2009-02-22
+# 1.2.0 / 2009-02-22
 
 * New features
 
@@ -869,7 +1107,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Nokogiri::HTML.fragment now returns an XML::DocumentFragment (LH #32)
 
 
-=== 1.1.1
+# 1.1.1
 
 * New features
 
@@ -887,7 +1125,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * XML::NodeSet implements to_xml
 
 
-=== 1.1.0
+# 1.1.0
 
 * New Features
 
@@ -904,7 +1142,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * XML::Node#add_previous_sibling returns new sibling node.
 
 
-=== 1.0.7
+# 1.0.7
 
 * Bugfixes
 
@@ -916,7 +1154,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Fixed a bug in complex CSS negation selectors
 
 
-=== 1.0.6
+# 1.0.6
 
 * 5 Bugfixes
 
@@ -927,7 +1165,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * CSS to XPath conversion is now cached
 
 
-=== 1.0.5
+# 1.0.5
 
 * Bugfixes
 
@@ -936,7 +1174,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Caching results of NodeSet#[] on Document
 
 
-=== 1.0.4
+# 1.0.4
 
 * Bugfixes
 
@@ -945,7 +1183,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * Builder blocks can call methods from surrounding contexts
 
 
-=== 1.0.3
+# 1.0.3
 
 * 5 Bugfixes
 
@@ -956,14 +1194,14 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
   * inner_html fixed. (Thanks Yehuda!)
 
 
-=== 1.0.2
+# 1.0.2
 
 * 1 Bugfix
 
   * extconf.rb should not check for frex and racc
 
 
-=== 1.0.1
+# 1.0.1
 
 * 1 Bugfix
 
@@ -971,7 +1209,7 @@ Repackaging of 1.5.1 with a gemspec that is compatible with older Rubies. #631, 
     will link properly.  Thanks lucsky!
 
 
-=== 1.0.0 / 2008-07-13
+# 1.0.0 / 2008-07-13
 
 * 1 major enhancement
 

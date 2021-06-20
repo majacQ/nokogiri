@@ -14,6 +14,11 @@ module Nokogiri
         assert @html.xpath(nil)
       end
 
+      def test_does_not_fail_with_illformatted_html
+        doc = Nokogiri::HTML('"</html>";'.force_encoding(Encoding::BINARY))
+        assert_not_nil doc
+      end
+
       def test_exceptions_remove_newlines
         errors = @html.errors
         assert errors.length > 0, 'has errors'
@@ -88,11 +93,11 @@ module Nokogiri
       def test_document_parse_method_with_url
         require 'open-uri'
         begin
-          html = open('http://google.com').read
-        rescue
-          skip("This test needs the internet. Skips if no internet available.")
+          html = open('https://www.yahoo.com').read
+        rescue Exception => e
+          skip("This test needs the internet. Skips if no internet available. (#{e})")
         end
-        doc = Nokogiri::HTML html ,"http:/foobar.foobar/"
+        doc = Nokogiri::HTML html ,"http:/foobar.foobar/", 'UTF-8'
         refute_empty doc.to_s, "Document should not be empty"
       end
 
@@ -417,7 +422,7 @@ eohtml
         eohtml
         set = html.css('p, a')
         assert_equal(2, set.length)
-        assert_equal ['a tag', 'p tag'].sort, set.map { |x| x.content }.sort
+        assert_equal ['a tag', 'p tag'].sort, set.map(&:content).sort
       end
 
       def test_inner_text
@@ -472,6 +477,15 @@ eohtml
         found = @html.css("div[@id='header'] > h1")
         found = @html.css("div[@id='header'] h1") # this blows up on commit 6fa0f6d329d9dbf1cc21c0ac72f7e627bb4c05fc
         assert_equal 1, found.length
+      end
+
+      def test_find_by_css_with_escaped_characters
+        found_without_escape = @html.css("div[@id='abc.123']")
+        found_by_id = @html.css('#abc\.123')
+        found_by_class = @html.css('.special\.character')
+        assert_equal 1, found_without_escape.length
+        assert_equal found_by_id, found_without_escape
+        assert_equal found_by_class, found_without_escape
       end
 
       def test_find_with_function
@@ -586,7 +600,7 @@ eohtml
         eohtml
         list = doc.css('.red')
         assert_equal 2, list.length
-        assert_equal %w{ RED RED }, list.map { |x| x.text }
+        assert_equal %w{ RED RED }, list.map(&:text)
       end
 
       def test_parse_can_take_io
@@ -623,19 +637,64 @@ eohtml
       end
 
       def test_capturing_nonparse_errors_during_node_copy_between_docs
-        skip("JRuby HTML parse errors are different than libxml2's") if Nokogiri.jruby?
-
-        doc1 = Nokogiri::HTML("<div id='unique'>one</div>")
-        doc2 = Nokogiri::HTML("<div id='unique'>two</div>")
+        # Errors should be emitted while parsing only, and should not change when moving nodes.
+        doc1 = Nokogiri::HTML("<html><body><diva id='unique'>one</diva></body></html>")
+        doc2 = Nokogiri::HTML("<html><body><dive id='unique'>two</dive></body></html>")
         node1 = doc1.at_css("#unique")
         node2 = doc2.at_css("#unique")
-
-        original_errors = doc1.errors.dup
+        original_errors1 = doc1.errors.dup
+        original_errors2 = doc2.errors.dup
+        assert original_errors1.any?{|e| e.to_s =~ /Tag diva invalid/ }, "it should complain about the tag name"
+        assert original_errors2.any?{|e| e.to_s =~ /Tag dive invalid/ }, "it should complain about the tag name"
 
         node1.add_child node2
 
-        assert_equal original_errors.length+1, doc1.errors.length
-        assert_match /ID unique already defined/, doc1.errors.last.to_s
+        assert_equal original_errors1, doc1.errors
+        assert_equal original_errors2, doc2.errors
+      end
+
+      def test_silencing_nonparse_errors_during_attribute_insertion_1262
+        # see https://github.com/sparklemotion/nokogiri/issues/1262
+        #
+        # libxml2 emits a warning when this happens; the JRuby
+        # implementation does not. so rather than capture the error in
+        # doc.errors in a platform-dependent way, I'm opting to have
+        # the error silenced.
+        #
+        # So this test doesn't look meaningful, but we want to avoid
+        # having `ID unique-issue-1262 already defined` emitted to
+        # stderr when running the test suite.
+        #
+        doc = Nokogiri::HTML::Document.new
+        Nokogiri::XML::Element.new("div", doc).set_attribute('id', 'unique-issue-1262')
+        Nokogiri::XML::Element.new("div", doc).set_attribute('id', 'unique-issue-1262')
+        assert_equal 0, doc.errors.length
+      end
+
+      it "skips encoding for script tags" do
+        html = Nokogiri::HTML <<-EOHTML
+        <html>
+          <head>
+            <script>var isGreater = 4 > 5;</script>
+          </head>
+          <body></body>
+        </html>
+        EOHTML
+        node = html.xpath("//script").first
+        assert_equal("var isGreater = 4 > 5;", node.inner_html)
+      end
+
+      it "skips encoding for style tags" do
+        html = Nokogiri::HTML <<-EOHTML
+        <html>
+          <head>
+            <style>tr > div { display:block; }</style>
+          </head>
+          <body></body>
+        </html>
+        EOHTML
+        node = html.xpath("//style").first
+        assert_equal("tr > div { display:block; }", node.inner_html)
       end
     end
   end

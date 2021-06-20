@@ -40,7 +40,7 @@ module Nokogiri
 
       def test_namespace_node_prefix
         namespaces = @xml.root.namespace_definitions
-        assert_equal [nil, 'foo'], namespaces.map { |x| x.prefix }
+        assert_equal [nil, 'foo'], namespaces.map(&:prefix)
       end
 
       def test_namespace_node_href
@@ -48,7 +48,7 @@ module Nokogiri
         assert_equal [
           'http://tenderlovemaking.com/',
           'bar'
-        ], namespaces.map { |x| x.href }
+        ], namespaces.map(&:href)
       end
 
       def test_equality
@@ -69,6 +69,7 @@ module Nokogiri
       def test_remove_entity_namespace
         s = %q{<?xml version='1.0'?><!DOCTYPE schema PUBLIC "-//W3C//DTD XMLSCHEMA 200102//EN" "XMLSchema.dtd" [<!ENTITY % p ''>]>}
         Nokogiri::XML(s).remove_namespaces!
+        # TODO: we should probably assert something here. See commit 14d2f59.
       end
 
       def test_maintain_element_namespaces
