@@ -51,10 +51,6 @@ static void relink_namespace(xmlNodePtr reparented)
 
     ns = xmlSearchNs(reparented->doc, reparented, prefix);
 
-    if (ns == NULL && reparented->parent) {
-      ns = xmlSearchNs(reparented->doc, reparented->parent, prefix);
-    }
-
     if (ns != NULL) {
       xmlNodeSetName(reparented, name);
       xmlSetNs(reparented, ns);
@@ -1133,7 +1129,8 @@ static VALUE set_native_content(VALUE self, VALUE content)
  * call-seq:
  *  content
  *
- * Returns the content for this Node
+ * Returns the plaintext content for this Node. Note that entities will always
+ * be expanded in the returned string.
  */
 static VALUE get_native_content(VALUE self)
 {
