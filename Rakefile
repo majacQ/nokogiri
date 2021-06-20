@@ -4,8 +4,99 @@ require 'hoe'
 Hoe.plugin :bundler
 Hoe.plugin :debugging
 Hoe.plugin :gemspec
+  <<<<<<< flavorjones-concourse-across-matrix
 Hoe.plugin :git
 Hoe.plugin :markdown
+  =======
+Hoe.plugin :bundler
+
+GENERATED_PARSER    = "lib/nokogiri/css/parser.rb"
+GENERATED_TOKENIZER = "lib/nokogiri/css/tokenizer.rb"
+
+require 'jars/installer'
+desc "Resolve jarfile dependencies"
+task :install_jars do
+  Jars::Installer.vendor_jars!
+end
+
+def java?
+  /java/ === RUBY_PLATFORM
+end
+
+ENV['LANG'] = "en_US.UTF-8" # UBUNTU 10.04, Y U NO DEFAULT TO UTF-8?
+
+CrossRuby = Struct.new(:version, :host) {
+  def ver
+    @ver ||= version[/\A[^-]+/]
+  end
+
+  def minor_ver
+    @minor_ver ||= ver[/\A\d\.\d(?=\.)/]
+  end
+
+  def api_ver_suffix
+    case minor_ver
+    when nil
+      raise "unsupported version: #{ver}"
+    else
+      minor_ver.delete('.') << '0'
+    end
+  end
+
+  def platform
+    @platform ||=
+      case host
+      when /\Ax86_64-/
+        'x64-mingw32'
+      when /\Ai[3-6]86-/
+        'x86-mingw32'
+      else
+        raise "unsupported host: #{host}"
+      end
+  end
+
+  def tool(name)
+    (@binutils_prefix ||=
+      case platform
+      when 'x64-mingw32'
+        'x86_64-w64-mingw32-'
+      when 'x86-mingw32'
+        'i686-w64-mingw32-'
+      end) + name
+  end
+
+  def target
+    case platform
+    when 'x64-mingw32'
+      'pei-x86-64'
+    when 'x86-mingw32'
+      'pei-i386'
+    end
+  end
+
+  def libruby_dll
+    case platform
+    when 'x64-mingw32'
+      "x64-msvcrt-ruby#{api_ver_suffix}.dll"
+    when 'x86-mingw32'
+      "msvcrt-ruby#{api_ver_suffix}.dll"
+    end
+  end
+
+  def dlls
+    [
+      'kernel32.dll',
+      'msvcrt.dll',
+      'ws2_32.dll',
+      *(case
+        when ver >= '2.0.0'
+          'user32.dll'
+        end),
+      libruby_dll
+    ]
+  end
+}
+  >>>>>>> 1253-use-jar-dependencies
 
 require 'shellwords'
 
@@ -64,6 +155,13 @@ HOE = Hoe.spec 'nokogiri' do
     ["rubocop", "~> 0.88"],
     ["simplecov", "~> 0.17.0"], # locked due to https://github.com/codeclimate/test-reporter/issues/413
   ]
+
+  if java?
+    self.extra_dev_deps += [
+      ["jar-dependencies",   "~> 0.4"],
+      ["jbundler",           "~> 0.9"],
+    ]
+  end
 
   self.spec_extras = {
     :extensions => ["ext/nokogiri/extconf.rb"],
