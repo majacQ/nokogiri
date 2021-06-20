@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 module Nokogiri
   module XML
     class DocumentFragment < Nokogiri::XML::Node
@@ -23,6 +24,17 @@ module Nokogiri
                        .xpath("/root/node()")
                    end
         children.each { |child| child.parent = self }
+      end
+
+      if Nokogiri.uses_libxml?
+        def dup
+          new_document = document.dup
+          new_fragment = self.class.new(new_document)
+          children.each do |child|
+            child.dup(1, new_document).parent = new_fragment
+          end
+          new_fragment
+        end
       end
 
       ###

@@ -1,0 +1,65 @@
+% require "common_prelude.rb"
+
+resource_types:
+<%= erbify_file "common_resource_types.yml" -%>
+
+
+resources:
+<%= erbify_file "common_resources.yml" -%>
+  - name: nokogiri
+    type: git
+    icon: "github"
+    source:
+      uri: https://github.com/sparklemotion/nokogiri/
+      branch: flavorjones-concourse-across-matrix
+      ignore_paths: <%= $common_ignore_paths %>
+
+
+anchors:
+<%= erbify_file "common_anchors.yml" -%>
+
+
+jobs:
+  - name: cruby
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri
+      - task: rake-test
+        across:
+          - var: system_p
+            values: ["t", ""]
+            max_in_flight: all
+          - var: ruby_version
+            values: ["2.6", "2.7"]
+            max_in_flight: all
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-((.:ruby_version))"}
+          inputs:
+            - name: ci
+            - name: nokogiri
+          params:
+            TEST_WITH_SYSTEM_LIBRARIES: ((.:system_p))
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+      - task: rake-test-valgrind
+        across:
+          - var: ruby_version
+            values: ["2.6", "2.7"]
+            max_in_flight: all
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-((.:ruby_version))"}
+          inputs:
+            - name: ci
+            - name: nokogiri
+          params:
+            TEST_WITH_VALGRIND: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh

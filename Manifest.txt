@@ -1,25 +1,7 @@
-.autotest
-.cross_rubies
-.editorconfig
-.gemtest
-.travis.yml
-CHANGELOG.md
-CONTRIBUTING.md
-C_CODING_STYLE.rdoc
-Gemfile
-Gemfile-libxml-ruby
 LICENSE-DEPENDENCIES.md
 LICENSE.md
-Manifest.txt
 README.md
-ROADMAP.md
-Rakefile
-SECURITY.md
-STANDARD_RESPONSES.md
-Y_U_NO_GEMSPEC.md
-appveyor.yml
 bin/nokogiri
-build_all
 dependencies.yml
 ext/java/nokogiri/EncodingHandler.java
 ext/java/nokogiri/HtmlDocument.java
@@ -58,7 +40,6 @@ ext/java/nokogiri/internals/HtmlDomParserContext.java
 ext/java/nokogiri/internals/IgnoreSchemaErrorsErrorHandler.java
 ext/java/nokogiri/internals/NokogiriBlockingQueueInputStream.java
 ext/java/nokogiri/internals/NokogiriDomParser.java
-ext/java/nokogiri/internals/NokogiriEncodingReaderWrapper.java
 ext/java/nokogiri/internals/NokogiriEntityResolver.java
 ext/java/nokogiri/internals/NokogiriErrorHandler.java
 ext/java/nokogiri/internals/NokogiriHandler.java
@@ -76,7 +57,6 @@ ext/java/nokogiri/internals/ParserContext.java
 ext/java/nokogiri/internals/ReaderNode.java
 ext/java/nokogiri/internals/SaveContextVisitor.java
 ext/java/nokogiri/internals/SchemaErrorHandler.java
-ext/java/nokogiri/internals/UncloseableInputStream.java
 ext/java/nokogiri/internals/XalanDTMManagerPatch.java
 ext/java/nokogiri/internals/XmlDeclHandler.java
 ext/java/nokogiri/internals/XmlDomParserContext.java
@@ -108,7 +88,8 @@ ext/java/nokogiri/internals/c14n/NameSpaceSymbTable.java
 ext/java/nokogiri/internals/c14n/NodeFilter.java
 ext/java/nokogiri/internals/c14n/UtfHelpper.java
 ext/java/nokogiri/internals/c14n/XMLUtils.java
-ext/java/org/apache/xml/dtm/ref/dom2dtm/DOM2DTMExt.java
+ext/java/nokogiri/internals/dom2dtm/DOM2DTM.java
+ext/java/nokogiri/internals/dom2dtm/DOM2DTMdefaultNamespaceDeclarationNode.java
 ext/nokogiri/depend
 ext/nokogiri/extconf.rb
 ext/nokogiri/html_document.c
@@ -204,6 +185,7 @@ lib/nokogiri/html/entity_lookup.rb
 lib/nokogiri/html/sax/parser.rb
 lib/nokogiri/html/sax/parser_context.rb
 lib/nokogiri/html/sax/push_parser.rb
+lib/nokogiri/jruby/dependencies.rb
 lib/nokogiri/syntax_error.rb
 lib/nokogiri/version.rb
 lib/nokogiri/xml.rb
@@ -250,6 +232,7 @@ lib/xalan.jar
 lib/xercesImpl.jar
 lib/xml-apis.jar
 lib/xsd/xmlparser/nokogiri.rb
+  <<<<<<< v1.8.x
 patches/libxml2/0001-Revert-Do-not-URI-escape-in-server-side-includes.patch
 patches/libxml2/0002-Fix-nullptr-deref-with-XPath-logic-ops.patch
 patches/libxml2/0003-Fix-infinite-loop-in-LZMA-decompression.patch
@@ -369,3 +352,5 @@ test/xml/test_xinclude.rb
 test/xml/test_xpath.rb
 test/xslt/test_custom_functions.rb
 test/xslt/test_exception_handling.rb
+  =======
+  >>>>>>> 1253-use-jar-dependencies

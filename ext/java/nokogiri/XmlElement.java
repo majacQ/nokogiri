@@ -32,15 +32,15 @@
 
 package nokogiri;
 
-import nokogiri.internals.SaveContextVisitor;
-
 import org.jruby.Ruby;
-import org.jruby.RubyArray;
 import org.jruby.RubyClass;
 import org.jruby.anno.JRubyClass;
 import org.jruby.runtime.ThreadContext;
+import org.jruby.runtime.builtin.IRubyObject;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+
+import nokogiri.internals.SaveContextVisitor;
 
 /**
  * Class for Nokogiri::XML::Element
@@ -60,28 +60,9 @@ public class XmlElement extends XmlNode {
     }
     
     @Override
-    public void setNode(ThreadContext context, Node node) {
-      super.setNode(context, node);
-      if (doc != null)
-        setInstanceVariable("@document", doc);
-    }
-    
-    @Override
     public void accept(ThreadContext context, SaveContextVisitor visitor) {
         visitor.enter((Element) node);
-        XmlNodeSet xmlNodeSet = (XmlNodeSet) children(context);
-        if (xmlNodeSet.length() > 0) {
-            RubyArray nodes = xmlNodeSet.nodes;
-            for( int i = 0; i < nodes.size(); i++ ) {
-                Object item = nodes.eltInternal(i);
-                if (item instanceof XmlNode) {
-                    ((XmlNode) item).accept(context, visitor);
-                }
-                else if (item instanceof XmlNamespace) {
-                    ((XmlNamespace) item).accept(context, visitor);
-                }
-            }
-        }
+        acceptChildren(context, getChildren(), visitor);
         visitor.leave((Element) node);
     }
 }

@@ -1,22 +1,10 @@
 #! /usr/bin/env bash
 
+test -e /etc/os-release && cat /etc/os-release
+
 set -e -x -u
 
-APT_UPDATED=false
-
-function ensure-apt-update {
-  if [[ $APT_UPDATED != "false" ]] ; then
-    return
-  fi
-
-  apt-get update
-  APT_UPDATED=true
-}
-
-if [[ ${TEST_WITH_APT_REPO_RUBY:-} != "" ]] ; then
-  ensure-apt-update
-  apt-get install -y ruby ruby-dev bundler libxslt-dev libxml2-dev pkg-config
-fi
+source "$(dirname "$0")/../../shared/code-climate.sh"
 
 VERSION_INFO=$(ruby -v)
 RUBY_ENGINE=$(cut -d" " -f1 <<< "${VERSION_INFO}")
@@ -43,35 +31,43 @@ function commit-is-post-frozen-string-support {
   return 1
 }
 
-function rbx-engine {
-  if [[ $RUBY_ENGINE == "rubinius" ]] ; then
-    return 0
-  fi
-  return 1
-}
-
 pushd nokogiri
 
-  if rbx-engine ; then
-    ensure-apt-update
-    apt-get install -y ca-certificates gcc pkg-config libxml2-dev libxslt-dev patch
-  fi
+  test_task="test"
 
-  RAKE_TASK="test"
+  # omg, jruby docker maintainers.
+  # see https://github.com/rubygems/bundler/issues/6162
+  # see https://github.com/rubygems/bundler/issues/6154
+  # and see https://github.com/docker-library/ruby/pull/209 which was the fix for cruby docker images.
+  export BUNDLE_GEMFILE="$(pwd)/Gemfile"
 
-  if [[ ${TEST_WITH_VALGRIND:-} != "" ]] ; then
-    RAKE_TASK="test:valgrind" # override
-    ensure-apt-update
-    apt-get install -y valgrind
-  fi
-
-  bundle install
+  bundle install --local || bundle install
   bundle exec rake generate # do this before setting frozen string option, because racc isn't compatible with frozen string literals yet
 
+  # TODO: remove this stanza once 9c41334 (2019-11-25) is far enough in the past
   if mri-24-or-greater && commit-is-post-frozen-string-support ; then
     export RUBYOPT="--enable-frozen-string-literal --debug=frozen-string-literal"
   fi
 
-  bundle exec rake ${RAKE_TASK}
+  if [[ "${TEST_WITH_SYSTEM_LIBRARIES:-}" == "t" ]] ; then
+    export NOKOGIRI_USE_SYSTEM_LIBRARIES=t
+  fi
+
+  if [[ "${TEST_WITH_VALGRIND:-}" == "t" ]] ; then
+    test_task="test:valgrind" # override
+    # export TESTOPTS="-v" # see more verbose output to help narrow down warnings
+
+    # always use the CI suppressions if they exist
+    if [[ -d ../ci/suppressions ]] ; then
+      rm -rf suppressions
+      cp -var ../ci/suppressions .
+    fi
+  fi
+
+  code-climate-setup
+
+  bundle exec rake compile ${test_task}
+
+  code-climate-shipit
 
 popd

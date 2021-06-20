@@ -1,0 +1,107 @@
+jobs:
+- name: cruby
+  on_failure:
+    in_parallel:
+      steps:
+      - params:
+          message: ($BUILD_PIPELINE_NAME/$BUILD_JOB_NAME) The build failed ($BUILD_URL)
+        put: irc
+      - params:
+          status: failed
+        put: gitter
+  plan:
+  - get: ci
+  - get: nokogiri
+  - across:
+    - max_in_flight: all
+      values:
+      - t
+      - ""
+      var: system_p
+    - max_in_flight: all
+      values:
+      - "2.6"
+      - "2.7"
+      var: ruby_version
+    config:
+      image_resource:
+        source:
+          repository: flavorjones/nokogiri-test
+          tag: mri-((.:ruby_version))
+        type: registry-image
+      inputs:
+      - name: ci
+      - name: nokogiri
+      params:
+        TEST_WITH_SYSTEM_LIBRARIES: ((.:system_p))
+      platform: linux
+      run:
+        path: ci/concourse/tasks/rake-test/run.sh
+    task: rake-test
+  - across:
+    - max_in_flight: all
+      values:
+      - "2.6"
+      - "2.7"
+      var: ruby_version
+    config:
+      image_resource:
+        source:
+          repository: flavorjones/nokogiri-test
+          tag: mri-((.:ruby_version))
+        type: registry-image
+      inputs:
+      - name: ci
+      - name: nokogiri
+      params:
+        TEST_WITH_VALGRIND: t
+      platform: linux
+      run:
+        path: ci/concourse/tasks/rake-test/run.sh
+    task: rake-test-valgrind
+  public: true
+resource_types:
+- name: irc-notification
+  source:
+    repository: flavorjones/irc-notification-resource
+  type: registry-image
+- name: webhook-notification
+  source:
+    repository: flavorjones/webhook-notification-resource
+    tag: latest
+  type: registry-image
+resources:
+- icon: cog
+  name: ci
+  source:
+    branch: flavorjones-concourse-across-matrix
+    disable_ci_skip: true
+    uri: https://github.com/sparklemotion/nokogiri/
+  type: git
+- icon: bell
+  name: irc
+  source:
+    channel: '#nokogiri'
+    password: ((nokobot-irc-password))
+    port: 7070
+    server: chat.freenode.net
+    user: ((nokobot-irc-username))
+  type: irc-notification
+- icon: bell
+  name: gitter
+  source:
+    adapter: GitterActivityFeedAdapter
+    url: ((nokogiri-gitter-channel-webhook-url))
+  type: webhook-notification
+- icon: github
+  name: nokogiri
+  source:
+    branch: flavorjones-concourse-across-matrix
+    ignore_paths:
+    - '*.md'
+    - concourse/**
+    - suppressions/**
+    - .github/**
+    - Vagrantfile
+    uri: https://github.com/sparklemotion/nokogiri/
+  type: git

@@ -1,16 +1,23 @@
 # -*- ruby -*-
-require 'rubygems'
-require 'shellwords'
-
-gem 'hoe'
 require 'hoe'
+
+Hoe.plugin :bundler
 Hoe.plugin :debugging
-Hoe.plugin :git
 Hoe.plugin :gemspec
+  <<<<<<< flavorjones-concourse-across-matrix
+Hoe.plugin :git
+Hoe.plugin :markdown
+  =======
 Hoe.plugin :bundler
 
 GENERATED_PARSER    = "lib/nokogiri/css/parser.rb"
 GENERATED_TOKENIZER = "lib/nokogiri/css/tokenizer.rb"
+
+require 'jars/installer'
+desc "Resolve jarfile dependencies"
+task :install_jars do
+  Jars::Installer.vendor_jars!
+end
 
 def java?
   /java/ === RUBY_PLATFORM
@@ -89,17 +96,12 @@ CrossRuby = Struct.new(:version, :host) {
     ]
   end
 }
+  >>>>>>> 1253-use-jar-dependencies
 
-CROSS_RUBIES = File.read('.cross_rubies').lines.flat_map { |line|
-  case line
-  when /\A([^#]+):([^#]+)/
-    CrossRuby.new($1, $2)
-  else
-    []
-  end
-}
+require 'shellwords'
 
-ENV['RUBY_CC_VERSION'] ||= CROSS_RUBIES.map(&:ver).uniq.join(":")
+require_relative "tasks/util"
+require_relative "tasks/cross-ruby"
 
 HOE = Hoe.spec 'nokogiri' do
   developer 'Aaron Patterson', 'aaronp@rubyforge.org'
@@ -112,67 +114,62 @@ HOE = Hoe.spec 'nokogiri' do
 
   license "MIT"
 
-  self.readme_file  = "README.md"
-  self.history_file = "CHANGELOG.md"
+  self.urls = {
+    "home" => "https://nokogiri.org",
+    "bugs" => "https://github.com/sparklemotion/nokogiri/issues",
+    "doco" => "https://nokogiri.org/rdoc/index.html",
+    "clog" => "https://nokogiri.org/CHANGELOG.html",
+    "code" => "https://github.com/sparklemotion/nokogiri",
+  }
 
-  self.extra_rdoc_files = FileList['*.rdoc','ext/nokogiri/*.c']
-
+  self.markdown_linkify_files = FileList["*.md"]
+  self.extra_rdoc_files = FileList['ext/nokogiri/*.c']
 
   self.clean_globs += [
     'nokogiri.gemspec',
     'lib/nokogiri/nokogiri.{bundle,jar,rb,so}',
-    'lib/nokogiri/[0-9].[0-9]'
+    'lib/nokogiri/[0-9].[0-9]',
   ]
   self.clean_globs += Dir.glob("ports/*").reject { |d| d =~ %r{/archives$} }
 
   unless java?
     self.extra_deps += [
-      ["mini_portile2",    "~> 2.3.0"], # keep version in sync with extconf.rb
+      ["mini_portile2", "~> 2.5.0"], # keep version in sync with extconf.rb
     ]
   end
 
   self.extra_dev_deps += [
-    ["hoe-bundler",        "~> 1.2"],
-    ["hoe-debugging",      "~> 1.4"],
-    ["hoe-gemspec",        "~> 1.0"],
-    ["hoe-git",            "~> 1.6"],
-    ["minitest",           "~> 5.8.4"],
-    ["rake",               "~> 12.0"],
-    ["rake-compiler",      "~> 1.0.3"],
-    ["rake-compiler-dock", "~> 0.6.2"],
-    ["racc",               "~> 1.4.14"],
-    ["rexical",            "~> 1.0.5"],
-    ["concourse",          "~> 0.15"],
+    ["concourse", "~> 0.34"],
+    ["hoe", ["~> 3.22", ">= 3.22.1"]],
+    ["hoe-bundler", "~> 1.2"],
+    ["hoe-debugging", "~> 2.0"],
+    ["hoe-gemspec", "~> 1.0"],
+    ["hoe-git", "~> 1.6"],
+    ["hoe-markdown", "~> 1.1"],
+    ["minitest", "~> 5.8"],
+    ["racc", "~> 1.4.14"],
+    ["rake", "~> 13.0"],
+    ["rake-compiler", "~> 1.1"],
+    ["rake-compiler-dock", "~> 1.0"],
+    ["rexical", "~> 1.0.5"],
+    ["rubocop", "~> 0.88"],
+    ["simplecov", "~> 0.17.0"], # locked due to https://github.com/codeclimate/test-reporter/issues/413
   ]
 
   if java?
-    self.spec_extras = {
-        :platform => 'java',
-        :required_ruby_version => '>= 1.9.3' # JRuby >= 1.7
-    }
-  else
-    self.spec_extras = {
-      :extensions => ["ext/nokogiri/extconf.rb"],
-      :required_ruby_version => '>= 2.1.0'
-    }
+    self.extra_dev_deps += [
+      ["jar-dependencies",   "~> 0.4"],
+      ["jbundler",           "~> 0.9"],
+    ]
   end
 
+  self.spec_extras = {
+    :extensions => ["ext/nokogiri/extconf.rb"],
+    :required_ruby_version => '>= 2.4.0'
+  }
+
   self.testlib = :minitest
-end
-
-# ----------------------------------------
-
-def add_file_to_gem relative_path
-  target_path = File.join gem_build_path, relative_path
-  target_dir = File.dirname(target_path)
-  mkdir_p target_dir unless File.directory?(target_dir)
-  rm_f target_path
-  safe_ln relative_path, target_path
-  HOE.spec.files += [relative_path]
-end
-
-def gem_build_path
-  File.join 'pkg', HOE.spec.full_name
+  self.test_prelude = 'require "helper"' # ensure simplecov gets loaded before anything else
 end
 
 if java?
@@ -193,14 +190,6 @@ if java?
     add_file_to_gem 'lib/nokogiri/nokogiri.jar'
   end
 else
-  begin
-    require 'rake/extensioncompiler'
-    # Ensure mingw compiler is installed
-    Rake::ExtensionCompiler.mingw_host
-    mingw_available = true
-  rescue
-    mingw_available = false
-  end
   require "rake/extensiontask"
 
   HOE.spec.files.reject! { |f| f =~ %r{\.(java|jar)$} }
@@ -229,120 +218,27 @@ else
   Rake::ExtensionTask.new("nokogiri", HOE.spec) do |ext|
     ext.lib_dir = File.join(*['lib', 'nokogiri', ENV['FAT_DIR']].compact)
     ext.config_options << ENV['EXTOPTS']
-    if mingw_available
-      ext.cross_compile  = true
-      ext.cross_platform = CROSS_RUBIES.map(&:platform).uniq
-      ext.cross_config_options << "--enable-cross-build"
-      ext.cross_compiling do |spec|
-        libs = dependencies.map { |name, dep| "#{name}-#{dep["version"]}" }.join(', ')
+    ext.cross_compile  = true
+    ext.cross_platform = CROSS_RUBIES.map(&:platform).uniq
+    ext.cross_config_options << "--enable-cross-build"
+    ext.cross_compiling do |spec|
+      libs = dependencies.map { |name, dep| "#{name}-#{dep["version"]}" }.join(', ')
 
-        spec.post_install_message = <<-EOS
+      spec.post_install_message = <<-EOS
 Nokogiri is built with the packaged libraries: #{libs}.
-        EOS
-        spec.files.reject! { |path| File.fnmatch?('ports/*', path) }
-      end
+      EOS
+      spec.files.reject! { |path| File.fnmatch?('ports/*', path) }
+      spec.dependencies.reject! { |dep| dep.name=='mini_portile2' }
     end
   end
 end
 
-# ----------------------------------------
-
-desc "Generate css/parser.rb and css/tokenizer.rex"
-task 'generate' => [GENERATED_PARSER, GENERATED_TOKENIZER]
-task 'gem:spec' => 'generate' if Rake::Task.task_defined?("gem:spec")
-
-# This is a big hack to make sure that the racc and rexical
-# dependencies in the Gemfile are constrainted to ruby platforms
-# (i.e. MRI and Rubinius). There's no way to do that through hoe,
-# and any solution will require changing hoe and hoe-bundler.
-old_gemfile_task = Rake::Task['bundler:gemfile'] rescue nil
-task 'bundler:gemfile' do
-  old_gemfile_task.invoke if old_gemfile_task
-
-  lines = File.open('Gemfile', 'r') { |f| f.readlines }.map do |line|
-    line =~ /racc|rexical/ ? "#{line.strip}, :platform => [:ruby, :mingw, :x64_mingw]" : line
-  end
-  File.open('Gemfile', 'w') { |f| lines.each { |line| f.puts line } }
-end
-
-file GENERATED_PARSER => "lib/nokogiri/css/parser.y" do |t|
-  sh "racc -l -o #{t.name} #{t.prerequisites.first}"
-end
-
-file GENERATED_TOKENIZER => "lib/nokogiri/css/tokenizer.rex" do |t|
-  sh "rex --independent -o #{t.name} #{t.prerequisites.first}"
-end
-
-[:compile, :check_manifest].each do |task_name|
-  Rake::Task[task_name].prerequisites << GENERATED_PARSER
-  Rake::Task[task_name].prerequisites << GENERATED_TOKENIZER
-end
-
-# ----------------------------------------
-
-desc "set environment variables to build and/or test with debug options"
-task :debug do
-  ENV['NOKOGIRI_DEBUG'] = "true"
-  ENV['CFLAGS'] ||= ""
-  ENV['CFLAGS'] += " -DDEBUG"
-end
-
-require File.join File.dirname(__FILE__), 'tasks/test'
-
-task :java_debug do
-  ENV['JRUBY_OPTS'] = "#{ENV['JRUBY_OPTS']} --debug --dev"
-  ENV['JAVA_OPTS'] = '-Xdebug -Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=y' if ENV['JAVA_DEBUG']
-end
-
-Rake::Task[:test].prerequisites << :compile
-Rake::Task[:test].prerequisites << :java_debug
-Rake::Task[:test].prerequisites << :check_extra_deps unless java?
-
-if Hoe.plugins.include?(:debugging)
-  ['valgrind', 'valgrind:mem', 'valgrind:mem0'].each do |task_name|
-    Rake::Task["test:#{task_name}"].prerequisites << :compile
-  end
-end
-
-require 'concourse'
-Concourse.new("nokogiri").create_tasks!
-
-# ----------------------------------------
-
-def verify_dll(dll, cross_ruby)
-  dll_imports = cross_ruby.dlls
-  dump = `#{['env', 'LANG=C', cross_ruby.tool('objdump'), '-p', dll].shelljoin}`
-  raise "unexpected file format for generated dll #{dll}" unless /file format #{Regexp.quote(cross_ruby.target)}\s/ === dump
-  raise "export function Init_nokogiri not in dll #{dll}" unless /Table.*\sInit_nokogiri\s/mi === dump
-
-  # Verify that the expected DLL dependencies match the actual dependencies
-  # and that no further dependencies exist.
-  dll_imports_is = dump.scan(/DLL Name: (.*)$/).map(&:first).map(&:downcase).uniq
-  if dll_imports_is.sort != dll_imports.sort
-    raise "unexpected dll imports #{dll_imports_is.inspect} in #{dll}"
-  end
-  puts "#{dll}: Looks good!"
-end
-
-task :cross do
-  rake_compiler_config_path = File.expand_path("~/.rake-compiler/config.yml")
-  unless File.exists? rake_compiler_config_path
-    raise "rake-compiler has not installed any cross rubies. Use rake-compiler-dock or 'rake gem:windows' for building binary windows gems."
-  end
-
-  CROSS_RUBIES.each do |cross_ruby|
-    task "tmp/#{cross_ruby.platform}/nokogiri/#{cross_ruby.ver}/nokogiri.so" do |t|
-      # To reduce the gem file size strip mingw32 dlls before packaging
-      sh [cross_ruby.tool('strip'), '-S', t.name].shelljoin
-      verify_dll t.name, cross_ruby
-    end
-  end
-end
-
-desc "build a windows gem without all the ceremony."
-task "gem:windows" do
-  require "rake_compiler_dock"
-  RakeCompilerDock.sh "bundle && rake cross native gem MAKE='nice make -j`nproc`' RUBY_CC_VERSION=#{ENV['RUBY_CC_VERSION']}"
-end
+require_relative "tasks/concourse"
+require_relative "tasks/css-generate"
+require_relative "tasks/debug"
+require_relative "tasks/docker"
+require_relative "tasks/docs-linkify"
+require_relative "tasks/rubocop"
+require_relative "tasks/set-version-to-timestamp"
 
 # vim: syntax=Ruby

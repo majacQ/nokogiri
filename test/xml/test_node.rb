@@ -165,6 +165,44 @@ module Nokogiri
         assert_equal x.first.name, "span"
       end
 
+      def test_dup_is_deep_copy_by_default
+        doc = XML::Document.parse "<root><div><p>hello</p></div></root>"
+        div = doc.at_css "div"
+        node = div.dup
+        assert_equal 1, node.children.length
+        assert_equal "<p>hello</p>", node.children.first.to_html
+      end
+
+      def test_dup_deep_copy
+        doc = XML::Document.parse "<root><div><p>hello</p></div></root>"
+        div = doc.at_css "div"
+        node = div.dup(1)
+        assert_equal 1, node.children.length
+        assert_equal "<p>hello</p>", node.children.first.to_html
+      end
+
+      def test_dup_shallow_copy
+        doc = XML::Document.parse "<root><div><p>hello</p></div></root>"
+        div = doc.at_css "div"
+        node = div.dup(0)
+        assert_equal 0, node.children.length
+      end
+
+      if Nokogiri.uses_libxml?
+        def test_dup_to_another_document
+          doc1 = HTML::Document.parse "<root><div><p>hello</p></div></root>"
+          doc2 = HTML::Document.parse "<div></div>"
+
+          div = doc1.at_css "div"
+          duplicate_div = div.dup(1, doc2)
+
+          assert_not_nil doc1.at_css("div")
+          assert_equal doc2, duplicate_div.document
+          assert_equal 1, duplicate_div.children.length
+          assert_equal "<p>hello</p>", duplicate_div.children.first.to_html
+        end
+      end
+
       def test_subclass_dup
         subclass = Class.new(Nokogiri::XML::Node)
         node = subclass.new('foo', @xml).dup
@@ -415,10 +453,17 @@ module Nokogiri
         assert_equal ns, ns2
       end
 
-      def test_add_default_ns
+      def test_add_default_namespace
         node = @xml.at('address')
         node.add_namespace(nil, 'http://tenderlovemaking.com')
         assert_equal 'http://tenderlovemaking.com', node.namespaces['xmlns']
+      end
+
+      def test_add_default_namespace_twice
+        node = @xml.at('address')
+        ns = node.add_namespace(nil, 'http://tenderlovemaking.com')
+        ns2 = node.add_namespace(nil, 'http://tenderlovemaking.com')
+        assert_equal ns.object_id, ns2.object_id
       end
 
       def test_add_multiple_namespaces
@@ -534,15 +579,6 @@ module Nokogiri
         assert_equal @xml.to_xml, io.read
       end
 
-      def test_attribute_with_symbol
-        assert_equal 'Yes', @xml.css('address').first[:domestic]
-      end
-
-      def test_non_existent_attribute_should_return_nil
-        node = @xml.root.first_element_child
-        assert_nil node.attribute('type')
-      end
-
       def test_write_to_with_block
         called = false
         io = StringIO.new
@@ -595,22 +631,6 @@ module Nokogiri
         assert_equal 'b', node_b.name
       end
 
-      def test_values
-        assert_equal %w{ Yes Yes }, @xml.xpath('//address')[1].values
-      end
-
-      def test_keys
-        assert_equal %w{ domestic street }, @xml.xpath('//address')[1].keys
-      end
-
-      def test_each
-        attributes = []
-        @xml.xpath('//address')[1].each do |key, value|
-          attributes << [key, value]
-        end
-        assert_equal [['domestic', 'Yes'], ['street', 'Yes']], attributes
-      end
-
       def test_new
         assert node = Nokogiri::XML::Node.new('input', @xml)
         assert_equal 1, node.node_type
@@ -635,132 +655,6 @@ module Nokogiri
           x.type == Node::ENTITY_DECL
         }
         assert entity_decl.read_only?
-      end
-
-      def test_remove_attribute
-        address = @xml.xpath('/staff/employee/address').first
-        assert_equal 'Yes', address['domestic']
-        attr = address.attributes['domestic']
-
-        returned_attr = address.remove_attribute 'domestic'
-        assert_nil address['domestic']
-        assert_equal attr, returned_attr
-      end
-
-      def test_remove_attribute_when_not_found
-        address = @xml.xpath('/staff/employee/address').first
-        attr = address.remove_attribute 'not-an-attribute'
-        assert_nil attr
-      end
-
-      def test_attribute_setter_accepts_non_string
-        address = @xml.xpath("/staff/employee/address").first
-        assert_equal "Yes", address[:domestic]
-        address[:domestic] = "Altered Yes"
-        assert_equal "Altered Yes", address[:domestic]
-      end
-
-      def test_attribute_accessor_accepts_non_string
-        address = @xml.xpath("/staff/employee/address").first
-        assert_equal "Yes", address["domestic"]
-        assert_equal "Yes", address[:domestic]
-      end
-
-      def test_empty_attribute_reading
-        node = Nokogiri::XML '<foo empty="" whitespace="  "/>'
-
-        assert_equal '', node.root['empty']
-        assert_equal '  ', node.root['whitespace']
-      end
-
-      def test_delete
-        address = @xml.xpath('/staff/employee/address').first
-        assert_equal 'Yes', address['domestic']
-        address.delete 'domestic'
-        assert_nil address['domestic']
-      end
-
-      def test_classes
-        xml = Nokogiri::XML(<<-eoxml)
-        <div>
-          <p class=" foo  bar foo ">test</p>
-          <p class="">test</p>
-        </div>
-        eoxml
-        div = xml.at_xpath('//div')
-        p1, p2 = xml.xpath('//p')
-
-        assert_equal [], div.classes
-        assert_equal %w[foo bar foo], p1.classes
-        assert_equal [], p2.classes
-      end
-
-      def test_add_class
-        xml = Nokogiri::XML(<<-eoxml)
-        <div>
-          <p class=" foo  bar foo ">test</p>
-          <p class="">test</p>
-        </div>
-        eoxml
-        div = xml.at_xpath('//div')
-        p1, p2 = xml.xpath('//p')
-
-        assert_same div, div.add_class('main')
-        assert_equal 'main', div['class']
-
-        assert_same p1, p1.add_class('baz foo')
-        assert_equal 'foo bar foo baz', p1['class']
-
-        assert_same p2, p2.add_class('foo baz foo')
-        assert_equal 'foo baz foo', p2['class']
-      end
-
-      def test_append_class
-        xml = Nokogiri::XML(<<-eoxml)
-        <div>
-          <p class=" foo  bar foo ">test</p>
-          <p class="">test</p>
-        </div>
-        eoxml
-        div = xml.at_xpath('//div')
-        p1, p2 = xml.xpath('//p')
-
-        assert_same div, div.append_class('main')
-        assert_equal 'main', div['class']
-
-        assert_same p1, p1.append_class('baz foo')
-        assert_equal 'foo bar foo baz foo', p1['class']
-
-        assert_same p2, p2.append_class('foo baz foo')
-        assert_equal 'foo baz foo', p2['class']
-      end
-
-      def test_remove_class
-        xml = Nokogiri::XML(<<-eoxml)
-        <div>
-          <p class=" foo  bar baz foo ">test</p>
-          <p class=" foo  bar baz foo ">test</p>
-          <p class="foo foo">test</p>
-          <p class="">test</p>
-        </div>
-        eoxml
-        div = xml.at_xpath('//div')
-        p1, p2, p3, p4 = xml.xpath('//p')
-
-        assert_same div, div.remove_class('main')
-        assert_nil div['class']
-
-        assert_same p1, p1.remove_class('bar baz')
-        assert_equal 'foo foo', p1['class']
-
-        assert_same p2, p2.remove_class()
-        assert_nil p2['class']
-
-        assert_same p3, p3.remove_class('foo')
-        assert_nil p3['class']
-
-        assert_same p4, p4.remove_class('foo')
-        assert_nil p4['class']
       end
 
       def test_set_content_with_symbol
@@ -867,19 +761,6 @@ module Nokogiri
         assert_equal('1', node['foo'])
         node['foo'] = false
         assert_equal('false', node['foo'])
-      end
-
-      def test_attributes
-        assert node = @xml.search('//address').first
-        assert_nil(node['asdfasdfasdf'])
-        assert_equal('Yes', node['domestic'])
-
-        assert node = @xml.search('//address')[2]
-        attr = node.attributes
-        assert_equal 2, attr.size
-        assert_equal 'Yes', attr['domestic'].value
-        assert_equal 'Yes', attr['domestic'].to_s
-        assert_equal 'No', attr['street'].value
       end
 
       def test_path
@@ -1177,6 +1058,14 @@ EOXML
         assert_equal 2, node.line
       end
 
+      def test_set_line
+        skip "Only supported with libxml2" unless Nokogiri.uses_libxml?
+        document = Nokogiri::XML::Document.new
+        node = document.create_element('a')
+        node.line = 54321
+        assert_equal 54321, node.line
+      end
+
       def test_xpath_results_have_document_and_are_decorated
         x = Module.new do
           def awesome! ; end
@@ -1319,6 +1208,15 @@ eoxml
           node.add_previous_sibling(Nokogiri::XML::Text.new('before', node.document))
           node.add_next_sibling(Nokogiri::XML::Text.new('after', node.document))
         end
+      end
+
+      def test_wrap
+        xml = '<root><thing><div class="title">important thing</div></thing></root>'
+        doc = Nokogiri::XML(xml)
+        thing = doc.at_css("thing")
+        thing.wrap("<wrapper/>")
+        assert_equal 'wrapper', thing.parent.name
+        assert_equal 'thing', doc.at_css("wrapper").children.first.name
       end
     end
   end

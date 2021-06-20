@@ -1,56 +1,61 @@
 libxml2:
-  version: "2.9.8"
-  sha256: "0b74e51595654f958148759cfef0993114ddccccbb6f31aee018f3558e8e2732"
-  # manually verified checksum:
+  version: "2.9.10"
+  sha256: "aafee193ffb8fe0c82d4afef6ef91972cbaf5feea100edc2f262750611b4be1f"
+  #  manually verified checksum:
   #
-  #   $ gpg --verify libxml2-2.9.8.tar.gz.asc ./ports/archives/libxml2-2.9.8.tar.gz
-  #   gpg: Signature made Mon 05 Mar 2018 11:07:45 AM EST using RSA key ID 596BEA5D
-  #   gpg: Good signature from "Daniel Veillard (Red Hat work email) <veillard@redhat.com>"
-  #   gpg:                 aka "Daniel Veillard <Daniel.Veillard@w3.org>"
-  #   gpg: WARNING: This key is not certified with a trusted signature!
-  #   gpg:          There is no indication that the signature belongs to the owner.
-  #   Primary key fingerprint: C744 15BA 7C9C 7F78 F02E  1DC3 4606 B8A5 DE95 BC1F
-  #        Subkey fingerprint: DB46 681B B91A DCEA 170F  A2D4 1558 8B26 596B EA5D
+  #    $ gpg --verify libxml2-2.9.10.tar.gz.asc ports/archives/libxml2-2.9.10.tar.gz 
+  #    gpg: Signature made Wed 30 Oct 2019 03:15:42 PM EDT
+  #    gpg:                using RSA key DB46681BB91ADCEA170FA2D415588B26596BEA5D
+  #    gpg: Good signature from "Daniel Veillard (Red Hat work email) <veillard@redhat.com>" [unknown]
+  #    gpg:                 aka "Daniel Veillard <Daniel.Veillard@w3.org>" [unknown]
+  #    gpg: WARNING: This key is not certified with a trusted signature!
+  #    gpg:          There is no indication that the signature belongs to the owner.
+  #    Primary key fingerprint: C744 15BA 7C9C 7F78 F02E  1DC3 4606 B8A5 DE95 BC1F
+  #         Subkey fingerprint: DB46 681B B91A DCEA 170F  A2D4 1558 8B26 596B EA5D
   #
-  # using this pgp signature:
-  #   -----BEGIN PGP SIGNATURE-----
+  #  using this pgp signature:
   #
-  #   iQEcBAABAgAGBQJanWtRAAoJEBVYiyZZa+pdV7oIAJWdFahwt+reN/Zt2RPmjjcr
-  #   eSsY7UV1RXjScnNjTzJT1h2hJ7SnUjCkqjR6VdtKDUIzpuX+S2U83joafJH6mxUb
-  #   yw2nO4RfjYTPxpz5JkvqT7jmgEIaD81BuwcMehqpMpIfiKa2NgO1DSfZxgs8a9E2
-  #   +ehc/kZWuI5gmNGrd84EEWUqpYW/Xx7jy02osioJuU5IMPjzZKNR3maXp9oAKeBc
-  #   S2QNa1ID/pUk3K3M/5nlwNgAtQ7lxQrqhrSma2dsKt/IpL6VXomxuD4Bh1r2MZhX
-  #   uZ456X/xJN8UmPewLZWGBU1MK9wqu3Zx5Qwz64H6UdlYIzXZ2jXj2YWZa6xkxPA=
-  #   =69xn
-  #   -----END PGP SIGNATURE-----
+  #    -----BEGIN PGP SIGNATURE-----
+  #    
+  #    iQEzBAABCAAdFiEE20ZoG7ka3OoXD6LUFViLJllr6l0FAl254V4ACgkQFViLJllr
+  #    6l0ldAf6Azt4/oKDfMKRd+xaykUrb+34dr2ZRsjRDS1cnelAtL9TCWhE5lOkLI3c
+  #    3FyNRaLhOEOOluZmKTJYyzS42JSSHDhxGj14gIeyafOjvRhHG3h1m5GvMmvgKWkd
+  #    qzxFrVFSG26iWJxMvxIA88t7M+QHb7ff7xR29ETJscewEmAd3LmZITglK02lWeGz
+  #    LfxfLuakM6RnCUu0dzacJKO0nMOKju+RL/N9bciI/UOhNYEkWqPnzC0GzbvFLqDu
+  #    rM+OvCSewSTziiejpdrUwYXkY5Ui2+cxUbacLauEr8iRLg7xXKqv27NORE4yeQcS
+  #    LgIhxG/qSNfihMS6E1ZO5bK2DbGCZQ==
+  #    =ZNuc
+  #    -----END PGP SIGNATURE-----
   #
 
 libxslt:
-  version: "1.1.32"
-  sha256: "526ecd0abaf4a7789041622c3950c0e7f2c4c8835471515fd77eec684a355460"
-  # manually verified checksum:
+  version: "1.1.34"
+  sha256: "98b1bd46d6792925ad2dfe9a87452ea2adebf69dcb9919ffd55bf926a7f93f7f"
+  #  manually verified checksum:
   #
-  #   $ gpg --verify libxslt-1.1.32.tar.gz.asc libxslt-1.1.32.tar.gz
-  #   gpg: Signature made Thu 02 Nov 2017 04:35:04 PM EDT using RSA key ID 596BEA5D
-  #   gpg: Good signature from "Daniel Veillard (Red Hat work email) <veillard@redhat.com>"
-  #   gpg:                 aka "Daniel Veillard <Daniel.Veillard@w3.org>"
-  #   gpg: WARNING: This key is not certified with a trusted signature!
-  #   gpg:          There is no indication that the signature belongs to the owner.
-  #   Primary key fingerprint: C744 15BA 7C9C 7F78 F02E  1DC3 4606 B8A5 DE95 BC1F
-  #        Subkey fingerprint: DB46 681B B91A DCEA 170F  A2D4 1558 8B26 596B EA5D
+  #    $ gpg --verify ~/Downloads/libxslt-1.1.34.tar.gz.asc ports/archives/libxslt-1.1.34.tar.gz
+  #    gpg: Signature made Wed 30 Oct 2019 04:02:48 PM EDT
+  #    gpg:                using RSA key DB46681BB91ADCEA170FA2D415588B26596BEA5D
+  #    gpg: Good signature from "Daniel Veillard (Red Hat work email) <veillard@redhat.com>" [unknown]
+  #    gpg:                 aka "Daniel Veillard <Daniel.Veillard@w3.org>" [unknown]
+  #    gpg: WARNING: This key is not certified with a trusted signature!
+  #    gpg:          There is no indication that the signature belongs to the owner.
+  #    Primary key fingerprint: C744 15BA 7C9C 7F78 F02E  1DC3 4606 B8A5 DE95 BC1F
+  #         Subkey fingerprint: DB46 681B B91A DCEA 170F  A2D4 1558 8B26 596B EA5D
   #
-  # using this pgp signature:
+  #  using this pgp signature:
   #
-  #   -----BEGIN PGP SIGNATURE-----
-  #
-  #   iQEcBAABAgAGBQJZ+4F4AAoJEBVYiyZZa+pdy1IIAMX1DpzYGdnv6GCPSKeZ0woD
-  #   sHmSkygJep0/sUQD1cYunNsNZnGDgWhnsLAvHOn3opJgsiaZhmhJ8Uo7QNlT+ni1
-  #   AvRFgQoSXLWSF5kkun4u7RvnpDI6jYfCuYSwb9SO4EAYFAQQJXQaKCeFq71gad+p
-  #   XGHJFAy2TqUVLNZ5I1mQz/oBeDsJ7RzHpYqaBxsLDqrCzRQ9ai23q+dFGS3jvLBr
-  #   0gXw0MK73ceOwW12L5aLj4erNbATWmMFMDYZZwftysv3bgx2YfiOoZUTzufrB/Bc
-  #   MG8hP76aYBwIKNbhiDFGa2qdHGZGF7YQ4mi1/ZDX1K1G2tKKeEYxscM13JwiGb8=
-  #   =NuQO
-  #   -----END PGP SIGNATURE-----
+  #    -----BEGIN PGP SIGNATURE-----
+  #    
+  #    iQEzBAABCAAdFiEE20ZoG7ka3OoXD6LUFViLJllr6l0FAl257GgACgkQFViLJllr
+  #    6l2vVggAjJEHmASiS56SxhPOsGqbfBihM66gQFoIymQfMu2430N1GSTkLsfbkJO8
+  #    8yBX11NjzK/m9uxwshMW3rVCU7EpL3PUimN3reXdPiQj9hAOAWF1V3BZNevbQC2E
+  #    FCIraioukaidf8sjUG4/sGpK/gOcP/3hYoN0HUoBigCNJjDqhijxM3M3GJJtCASp
+  #    jL4CQbs2OmxW8ixOZbuWEESvFFHUgYRsdZjRVN+GRfSOvJjxypurmYwQ3RjO7JxL
+  #    2FY8qKQ+xpeID8NV8F5OUEvWBjk1QS133VTqBZNlONdnEtV/og6jNu5k0O/Kvhup
+  #    caR+8TMErOcLr9OgDklO6DoYyAsf9Q==
+  #    =g4i4
+  #    -----END PGP SIGNATURE-----
   #
 
 zlib:
