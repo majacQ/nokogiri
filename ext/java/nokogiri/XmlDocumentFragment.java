@@ -17,10 +17,10 @@
  * distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to
  * the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -51,6 +51,7 @@ import org.jruby.anno.JRubyClass;
 import org.jruby.anno.JRubyMethod;
 import org.jruby.runtime.Helpers;
 import org.jruby.runtime.ThreadContext;
+import org.jruby.runtime.Block;
 import org.jruby.runtime.builtin.IRubyObject;
 import org.jruby.util.ByteList;
 import org.w3c.dom.Attr;
@@ -58,7 +59,7 @@ import org.w3c.dom.NamedNodeMap;
 
 /**
  * Class for Nokogiri::XML::DocumentFragment
- * 
+ *
  * @author sergio
  * @author Yoko Harada <yokolet@gmail.com>
  */
@@ -75,10 +76,18 @@ public class XmlDocumentFragment extends XmlNode {
         super(ruby, klazz);
     }
 
+  <<<<<<< 1610-flavorjones-nokogiri-error-raise-considered-harmful
     @JRubyMethod(name="new", meta = true, required=1, optional=2)
     public static IRubyObject rbNew(ThreadContext context, IRubyObject cls, IRubyObject[] args) {
         if (args.length < 1) {
             throw context.runtime.newArgumentError(args.length, 1);
+  =======
+    @JRubyMethod(name="new", meta = true, required=1, optional=3)
+    public static IRubyObject rbNew(ThreadContext context, IRubyObject cls, IRubyObject[] args, Block block) {
+
+        if(args.length < 1) {
+            throw context.getRuntime().newArgumentError(args.length, 1);
+  >>>>>>> 1692-rebase-JackMc-add-options-argument-for-document-fragment
         }
 
         if (!(args[0] instanceof XmlDocument)){
@@ -86,7 +95,7 @@ public class XmlDocumentFragment extends XmlNode {
         }
 
         XmlDocument doc = (XmlDocument) args[0];
-        
+
         // make wellformed fragment, ignore invalid namespace, or add appropriate namespace to parse
         if (args.length > 1 && args[1] instanceof RubyString) {
             final RubyString arg1 = (RubyString) args[1];
@@ -159,10 +168,10 @@ public class XmlDocumentFragment extends XmlNode {
                 tags = tags.replace(e.getKey(), e.getValue());
             }
         }
-        
+
         return tags;
     }
-    
+
     private static CharSequence getNamespaceDecl(final String prefix, NamedNodeMap nodeMap) {
         for (int i=0; i < nodeMap.getLength(); i++) {
             Attr attr = (Attr) nodeMap.item(i);
