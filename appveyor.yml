@@ -22,6 +22,7 @@ install:
   - ruby --version
   - gem --version
   - gem install bundler --conservative
+  - git submodule update --init
   - bundle config --local path vendor/bundle
   - bundle install
   - IF DEFINED INSTALL_PACKAGES ( ridk exec pacman --noconfirm --needed --sync %INSTALL_PACKAGES% )
@@ -38,7 +39,7 @@ environment:
       INSTALL_PACKAGES: "mingw-w64-i686-libxslt"
       EXTCONF_PARAMS: "--use-system-libraries"
 
-    - ruby_version: 27
-    - ruby_version: 27
+    - ruby_version: 25
+    - ruby_version: 25
       INSTALL_PACKAGES: "mingw-w64-i686-libxslt"
       EXTCONF_PARAMS: "--use-system-libraries"

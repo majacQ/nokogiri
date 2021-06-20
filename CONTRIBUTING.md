@@ -79,7 +79,7 @@ Clone https://github.com/sparklemotion/nokogiri and run `bundle install`.
 
 ### Advanced
 
-Please install the latest or previous version of CRuby (e.g., 3.0 or 2.7 as of 2021-02), and a recent version of JRuby. We recommend using a Ruby manager like `rvm` or `chruby` to make it easy to switch.
+Please install the latest or previous version of CRuby (e.g., 3.0 or 2.7 as of 2021-02), and a recent version of JRuby. We recommend using `rbenv`, which is used in test scripts when necessary to test gems against multiple rubies.
 
 Please install a system version of libxml2/libxslt (see [Installing Nokogiri](https://nokogiri.org/tutorials/installing_nokogiri.html#installing-using-standard-system-libraries) for details) so that you can test against both the packaged libraries and your system libraries.
 
@@ -135,10 +135,14 @@ NOKOGIRI_TEST_GC_LEVEL=normal bundle exec rake compile test
 # minor GC after each test
 NOKOGIRI_TEST_GC_LEVEL=minor bundle exec rake compile test
 
-# major GC and a compaction after each test
+# major GC after each test
+NOKOGIRI_TEST_GC_LEVEL=major bundle exec rake compile test
+
+# major GC after each test and GC compaction after every 20 tests
 NOKOGIRI_TEST_GC_LEVEL=compact bundle exec rake compile test
 
-# verify references after compaction after every test
+# verify references after compaction after every 20 tests
+# (see https://alanwu.space/post/check-compaction/)
 NOKOGIRI_TEST_GC_LEVEL=verify bundle exec rake compile test
 
 # run with GC "stress mode" on
@@ -153,6 +157,21 @@ If you want to build Nokogiri against a modified version of libxml2, clone libxm
 That script also takes an optional command to run with the proper environment variables set to use the local libxml2 library, which can be useful when trying to `git bisect` against libxml2.
 
 
+### gumbo HTML5 parser
+
+To run the test suite for the gumbo parser:
+
+``` sh
+bundle exec rake gumbo
+```
+
+To make sure to run additional html5lib tests for Nokogiri's HTML5 parser:
+
+``` sh
+git submodule update --init # test/html5lib-tests
+bundle exec rake compile test
+```
+
 
 ## Style Guide
 
@@ -165,33 +184,24 @@ No, I don't want to talk to you about this.
 
 ## How Continuous Integration ("CI") is configured
 
-This section could probably be an entire guide unto itself, so I'll try to be as brief as reasonable.
+The bulk of CI is running in Github Actions since May 2021: https://github.com/sparklemotion/nokogiri/actions
 
-We currently have CI tests running in three places:
+However, we also run tests against 32-bit windows (which aren't supported by GA as of this writing) in Appveyor: https://ci.appveyor.com/project/flavorjones/nokogiri
 
-- [Concourse](https://ci.nokogiri.org/?search=nokogiri): Linux, including many debugging and integration test
-- [Github Actions](https://github.com/sparklemotion/nokogiri/actions/workflows/macos.yml): for MacOS only
-- [Appveyor](https://ci.appveyor.com/project/flavorjones/nokogiri): for Windows only
+Please note that there are some known holes in CI coverage due to `actions/download-artifact` (as well as other actions) not supporting systems other than 64-bit glibc:
 
-This is ... not great. I'd love to set up everything to be in one place, but each has its advantages. It might be possible to move Windows testing to Github Actions, but honestly I'm kinda waiting for someone from the Ruby Windows community to figure that out.
+- installing ruby and native gems on Alpine/musl
+- installing ruby and native gems on 32-bit Linux
 
-I've set up "required" builds for the `main` branch in Github so that PRs can see and be bound by all these tests passing.
+For more information, please check out [#2244](https://github.com/sparklemotion/nokogiri/issues/2244) and [#2247](https://github.com/sparklemotion/nokogiri/issues/2247) which document the migration from Concourse to Github Actions.
 
-### Concourse
+### Coverage
 
-We run the bulk of our tests under Concourse. Concourse is great for me because
-
-- I can hijack a container if a test fails and poke around in it
-- I can conditionally trigger the builds like a real pipeline
-- I can run it locally on my dev machine
-- I have complete control over the images used
-
-The downside is, nobody in the Ruby community besides me and Dr. Nic know how to operate it or configure it.
-
-In any case, the general pipeline we use is the same for `main` and for PRs includes:
+The `ci.yml` pipeline includes jobs to:
 
 - basic security sanity check: run rubocop
 - fast feedback for obvious failures: run against system libraries on vanilla ubuntu
+- run the gumbo parser tests on ubuntu, macos, and windows
 - run on all supported versions of CRuby:
     - once with packaged libraries
     - once with system libraries
@@ -203,18 +213,23 @@ In any case, the general pipeline we use is the same for `main` and for PRs incl
 - run with libxml-ruby loaded (because this interacts with libxml2 in conflicting ways)
     - against system libraries
     - with valgrind using packaged libraries
+
+The `upstream.yml` pipeline includes jobs to:
+
+- run against CRuby head (linux, windows, macos) including valgrind
+- run against JRuby head
+- run against libxml2 and libxslt head (linux only today) including valgrind
+
+The `gem-install.yml` pipeline includes jobs to:
+
 - build a "ruby" platform gem
-    - install and test on vanilla ubuntu
-    - install and test on musl
-- build a native 64-bit linux gem
-    - install and test on vanilla ubuntu with all supported versions of CRuby
-    - install and test on musl
-- build a native 32-bit linux gem
-    - install and test on vanilla ubuntu
+    - install and test on linux, macos, and windows
+- build a native 64-bit gem (linux, macos, windows)
+    - install and test against all supported versions of CRuby
     - install and test on musl
 - build a jruby gem, install and test it
 
-These pipelines are configured in `/concourse/nokogiri.yml` and `nokogiri-pr.yml`. Those files file are ... nontrivial, and I'm sorry about that. See https://github.com/flavorjones/concourse-gem for help.
+The `truffle.yml` pipeline tests TruffleRuby nightlies with a few different compile-time flags. TruffleRuby support is still experimental due to Sulong limitations, and the test suite is exceedingly slow when run by TR, so this pipeline doesn't run on pushes and PRs. Instead, it runs periodically on a timer to give us some signal without slowing down developer feedback loops.
 
 
 ### Valgrind
@@ -222,9 +237,11 @@ These pipelines are configured in `/concourse/nokogiri.yml` and `nokogiri-pr.yml
 We rely heavily on Valgrind to catch memory bugs by running in combination with every version of CRuby. We use suppressions, too -- because some Rubies seem to have memory issues? See the files in the `/suppressions` directory and `/rakelib/test.rake` for more information.
 
 
-### TruffleRuby
+### Conventions
 
-As of 2021-02, TruffleRuby tests are in a separate pipeline because they are failing in known ways that we haven't addressed yet, mostly related to error handling in SAX callbacks due to Sulong limitations.
+- Always checkout the source code including submodules (for the html5lib tests)
+- When testing packaged libraries (not system libraries), cache either `ports/` (for compiled libraries) or `ports/archives/` (for just tarballs)
+  - note that `libgumbo` is built outside of `ports/` to allow us to do this caching safely
 
 
 ## Building gems

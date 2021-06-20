@@ -12,11 +12,11 @@ task :check_manifest do
     .github
     .vagrant
     .yardoc
-    concourse
     coverage
     doc
     gems
     nokogumbo-import
+    oci-images
     patches
     pkg
     ports
@@ -33,6 +33,7 @@ task :check_manifest do
     .cross_rubies
     .editorconfig
     .gitignore
+    .gitmodules
     .yardopts
     CHANGELOG.md
     CODE_OF_CONDUCT.md
@@ -44,9 +45,11 @@ task :check_manifest do
     STANDARD_RESPONSES.md
     Vagrantfile
     [a-z]*.{log,out}
+    [0-9]*
     appveyor.yml
     gumbo-parser/test/*
     lib/nokogiri/**/nokogiri.{jar,so}
+    lib/nokogiri/nokogiri.{jar,so}
     nokogiri.gemspec
   ]
 

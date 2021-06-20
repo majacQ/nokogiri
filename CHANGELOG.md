@@ -16,6 +16,10 @@ Please also note that the `Nokogiri::HTML` parse methods still use libxml2's HTM
 
 Many thanks to Sam Ruby, Steve Checkoway, and Craig Barnes for creating and maintaining Nokogumbo and supporting the Gumbo HTML5 parser. They're now Nokogiri core contributors with all the powers and privileges pertaining thereto. 🙌
 
+#### Other
+
+* [CRuby] `Nokogiri::VERSION_INFO["libxslt"]["datetime_enabled"]` is a new boolean value which describes whether libxslt (or, more properly, libexslt) has compiled-in datetime support. This generally going to be `true`, but some distros ship without this support (e.g., some mingw UCRT-based packages, see https://github.com/msys2/MINGW-packages/pull/8957). See [#2272](https://github.com/sparklemotion/nokogiri/issues/2272) for more details.
+
 
 ### Changed
 
@@ -36,7 +40,14 @@ Many thanks to Sam Ruby, Steve Checkoway, and Craig Barnes for creating and main
 
 ### Dependencies
 
-* [CRuby] Upgrade mini_portile2 dependency from `~> 2.5.0` to `~> 2.5.1`. ("ruby" platform gem only.)
+* [CRuby] Upgrade mini_portile2 dependency from `~> 2.5.0` to `~> 2.6.1`. ("ruby" platform gem only.)
+
+
+## 1.11.7 / 2021-06-02
+
+### Fixed
+
+* [CRuby] Backporting an upstream fix to XPath recursion depth limits which impacted some users of complex XPath queries. This issue is present in libxml 2.9.11 and 2.9.12. [[#2257](https://github.com/sparklemotion/nokogiri/issues/2257)]
 
 
 ## 1.11.6 / 2021-05-26
