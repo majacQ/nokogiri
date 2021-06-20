@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 module Nokogiri
   module XML
     class DocumentFragment < Nokogiri::XML::Node
@@ -28,7 +29,7 @@ module Nokogiri
       if Nokogiri.uses_libxml?
         def dup
           new_document = document.dup
-          new_fragment = XML::DocumentFragment.new(new_document)
+          new_fragment = self.class.new(new_document)
           children.each do |child|
             child.dup(1, new_document).parent = new_fragment
           end

@@ -1,6 +1,6 @@
 #include <xml_document.h>
 
-static int dealloc_node_i(xmlNodePtr key, xmlNodePtr node, xmlDocPtr doc)
+static int dealloc_node_i2(xmlNodePtr key, xmlNodePtr node, xmlDocPtr doc)
 {
   switch(node->type) {
   case XML_ATTRIBUTE_NODE:
@@ -20,6 +20,11 @@ static int dealloc_node_i(xmlNodePtr key, xmlNodePtr node, xmlDocPtr doc)
   return ST_CONTINUE;
 }
 
+static int dealloc_node_i(st_data_t key, st_data_t node, st_data_t doc)
+{
+  return dealloc_node_i2((xmlNodePtr)key, (xmlNodePtr)node, (xmlDocPtr)doc);
+}
+
 static void remove_private(xmlNodePtr node)
 {
   xmlNodePtr child;
@@ -36,6 +41,15 @@ static void remove_private(xmlNodePtr node)
   }
 
   node->_private = NULL;
+}
+
+static void mark(xmlDocPtr doc)
+{
+  nokogiriTuplePtr tuple = (nokogiriTuplePtr)doc->_private;
+  if(tuple) {
+      rb_gc_mark(tuple->doc);
+      rb_gc_mark(tuple->node_cache);
+  }
 }
 
 static void dealloc(xmlDocPtr doc)
@@ -588,7 +602,7 @@ VALUE Nokogiri_wrap_xml_document(VALUE klass, xmlDocPtr doc)
 
   VALUE rb_doc = Data_Wrap_Struct(
       klass ? klass : cNokogiriXmlDocument,
-      0,
+      mark,
       dealloc,
       doc
   );

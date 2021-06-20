@@ -1,0 +1,444 @@
+% require "common_prelude.rb"
+
+resource_types:
+<%= erbify_file "common_resource_types.yml" -%>
+  - name: pull-request
+    type: registry-image
+    source:
+      repository: teliaoss/github-pr-resource
+
+
+resources:
+<%= erbify_file "common_resources.yml" -%>
+  - name: nokogiri-pr
+    type: pull-request
+    icon: github
+    check_every: 15m
+    webhook_token: ((nokogiri-pr-webhook-token))
+    source:
+      repository: sparklemotion/nokogiri
+      access_token: ((github-repo-status-access-token))
+      ignore_paths: <%= $common_ignore_paths %>
+
+
+anchors:
+<%= erbify_file "common_anchors.yml" -%>
+  notify_failure_to_pr: &notify_failure_to_pr
+    put: nokogiri-pr
+    params: { path: nokogiri-pr, status: FAILURE }
+
+
+jobs:
+  - name: pr-pending
+    public: true
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+      - put: nokogiri-pr
+        params: { path: nokogiri-pr, status: PENDING }
+
+
+  - name: cruby-on-vanilla-ubuntu
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed: ["pr-pending"]
+      - task: rubocop
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: {repository: "flavorjones/nokogiri-test", tag: bionic}
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          run:
+            path: ci/concourse/tasks/rake-test/rubocop.sh
+      - task: rake-test
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: bionic }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            TEST_WITH_SYSTEM_LIBRARIES: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+
+
+  <% RUBIES[:mri].each do |ruby_version| %>
+  - name: cruby-<%= ruby_version %>
+    public: true
+    <% if Concourse.production_rubies.include?(ruby_version) %>
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    <% end %>
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed: ["cruby-on-vanilla-ubuntu"]
+      - task: rake-test-system-libraries
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= ruby_version %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            TEST_WITH_SYSTEM_LIBRARIES: t
+            <% if ruby_version == Concourse.production_rubies.last %>
+            CC_TEST_REPORTER_ID: ((code_climate_reporter_id_nokogiri))
+            <% end %>
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+      - task: rake-test-vendored-libraries
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= ruby_version %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+      - task: rake-test-valgrind
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= ruby_version %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            TEST_WITH_VALGRIND: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+  <% end %>
+
+
+  <% RUBIES[:jruby].each_with_index do |jruby_version, j| %>
+  - name: jruby-<%= jruby_version %>
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed: ["cruby-on-vanilla-ubuntu"]
+      - task: rake-test
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "jruby-<%= jruby_version %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+  <% end %>
+
+  <% RUBIES[:truffle].each_with_index do |truffle_version, j| %>
+  - name: truffle-<%= truffle_version %>
+    public: true
+#    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed: ["cruby-on-vanilla-ubuntu"]
+      - task: rake-test
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "truffle-<%= truffle_version %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+  <% end %>
+
+  - name: cruby-on-musl
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        passed:
+          <% Concourse.production_rubies.each do |ruby_version| %>
+          - cruby-<%= ruby_version %>
+          <% end %>
+      - task: rake-test-system-libraries
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "alpine" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            TEST_WITH_SYSTEM_LIBRARIES: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+      - task: rake-test-valgrind
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "alpine" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            TEST_WITH_VALGRIND: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+
+
+  - name: cruby-with-libxmlruby
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed:
+          <% Concourse.production_rubies.each do |ruby_version| %>
+          - cruby-<%= ruby_version %>
+          <% end %>
+      - task: rake-test-system-libraries
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= Concourse.production_rubies.last %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            BUNDLE_GEMFILE: "Gemfile-libxml-ruby"
+            TEST_WITH_SYSTEM_LIBRARIES: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+      - task: rake-test-valgrind
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= Concourse.production_rubies.last %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          params:
+            BUNDLE_GEMFILE: "Gemfile-libxml-ruby"
+            TEST_WITH_VALGRIND: t
+          run:
+            path: ci/concourse/tasks/rake-test/run.sh
+
+
+  - name: cruby-gem-test
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed:
+          <% Concourse.production_rubies.each do |ruby_version| %>
+          - cruby-<%= ruby_version %>
+          <% end %>
+      - task: build
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "larskanis/rake-compiler-dock-mri-x86_64-linux", tag: "<%= RakeCompilerDock::IMAGE_VERSION %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          outputs:
+            - name: gems
+          run:
+            path: ci/concourse/tasks/gem-test/gem-build.sh
+      - in_parallel:
+        - task: install-and-test
+          config:
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= Concourse.production_rubies.last %>" }
+            inputs:
+              - name: ci
+              - name: nokogiri-pr
+                path: nokogiri
+              - name: gems
+            run:
+              path: ci/concourse/tasks/gem-test/gem-install-and-test.sh
+        - task: install-and-test-on-musl
+          config:
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: "flavorjones/nokogiri-test", tag: "alpine" }
+            inputs:
+              - name: ci
+              - name: nokogiri-pr
+                path: nokogiri
+              - name: gems
+            run:
+              path: ci/concourse/tasks/gem-test/gem-install-and-test.sh
+
+
+  - name: cruby-native-gem-test
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed:
+          <% Concourse.production_rubies.each do |ruby_version| %>
+          - cruby-<%= ruby_version %>
+          <% end %>
+      - task: build
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "larskanis/rake-compiler-dock-mri-x86_64-linux", tag: "<%= RakeCompilerDock::IMAGE_VERSION %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          outputs:
+            - name: gems
+          params:
+            BUILD_NATIVE_GEM: t
+          run:
+            path: ci/concourse/tasks/gem-test/gem-build.sh
+      - in_parallel:
+        <% $native_ruby_versions.each do |ruby_version| %>
+        - task: install-and-test-<%= ruby_version %>
+          config:
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: "flavorjones/nokogiri-test", tag: "mri-<%= ruby_version %>" }
+            inputs:
+              - name: ci
+              - name: nokogiri-pr
+                path: nokogiri
+              - name: gems
+            run:
+              path: ci/concourse/tasks/gem-test/gem-install-and-test.sh
+        <% end %>
+        - task: install-and-test-on-musl
+          config:
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: "flavorjones/nokogiri-test", tag: "alpine" }
+            inputs:
+              - name: ci
+              - name: nokogiri-pr
+                path: nokogiri
+              - name: gems
+            run:
+              path: ci/concourse/tasks/gem-test/gem-install-and-test.sh
+
+
+  - name: jruby-gem-test
+    public: true
+    on_failure: { in_parallel: [*notify_failure_to_irc, *notify_failure_to_pr, *notify_failure_to_gitter] }
+    plan:
+      - get: ci
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed:
+          <% RUBIES[:jruby].each do |ruby_version| %>
+          - jruby-<%= ruby_version %>
+          <% end %>
+      - task: build
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "larskanis/rake-compiler-dock-jruby", tag: "<%= RakeCompilerDock::IMAGE_VERSION %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+          outputs:
+            - name: gems
+          run:
+            path: ci/concourse/tasks/gem-test/gem-build-java.sh
+      - task: install-and-test
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source: { repository: "flavorjones/nokogiri-test", tag: "jruby-<%= RUBIES[:jruby].last %>" }
+          inputs:
+            - name: ci
+            - name: nokogiri-pr
+              path: nokogiri
+            - name: gems
+          run:
+            path: ci/concourse/tasks/gem-test/gem-install-and-test.sh
+
+
+  - name: pr-success
+    public: true
+    disable_manual_trigger: true
+    plan:
+      - get: nokogiri-pr
+        trigger: true
+        version: every
+        passed:
+          - cruby-on-musl
+          - cruby-with-libxmlruby
+          - cruby-gem-test
+          - cruby-native-gem-test
+          - jruby-gem-test
+      - put: nokogiri-pr
+        params: { path: nokogiri-pr, status: SUCCESS }
+      - put: irc
+        params: { message: "($BUILD_PIPELINE_NAME/$BUILD_JOB_NAME) The build passed ($BUILD_URL)" }
+      - put: gitter
+        params: { status: "succeeded" }

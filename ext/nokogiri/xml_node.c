@@ -51,10 +51,6 @@ static void relink_namespace(xmlNodePtr reparented)
 
     ns = xmlSearchNs(reparented->doc, reparented, prefix);
 
-    if (ns == NULL && reparented->parent) {
-      ns = xmlSearchNs(reparented->doc, reparented->parent, prefix);
-    }
-
     if (ns != NULL) {
       xmlNodeSetName(reparented, name);
       xmlSetNs(reparented, ns);
@@ -305,7 +301,7 @@ ok:
        *  issue #391, where new node's prefix may become the string "default"
        *  see libxml2 tree.c xmlNewReconciliedNs which implements this behavior.
        */
-      xmlFree(reparentee->ns->prefix);
+      xmlFree((xmlChar*)reparentee->ns->prefix);
       reparentee->ns->prefix = NULL;
     }
   }
@@ -1133,7 +1129,8 @@ static VALUE set_native_content(VALUE self, VALUE content)
  * call-seq:
  *  content
  *
- * Returns the content for this Node
+ * Returns the plaintext content for this Node. Note that entities will always
+ * be expanded in the returned string.
  */
 static VALUE get_native_content(VALUE self)
 {
@@ -1333,6 +1330,25 @@ static VALUE line(VALUE self)
   Data_Get_Struct(self, xmlNode, node);
 
   return INT2NUM(xmlGetLineNo(node));
+}
+
+/*
+ * call-seq:
+ *  line=(num)
+ *
+ * Sets the line for this Node. num must be less than 65535.
+ */
+static VALUE set_line(VALUE self, VALUE num)
+{
+  xmlNodePtr node;
+  Data_Get_Struct(self, xmlNode, node);
+
+  int value = NUM2INT(num);
+  if (value < 65535) {
+    node->line = value;
+  }
+
+  return num;
 }
 
 /*
@@ -1731,6 +1747,7 @@ void init_xml_node()
   rb_define_method(klass, "create_external_subset", create_external_subset, 3);
   rb_define_method(klass, "pointer_id", pointer_id, 0);
   rb_define_method(klass, "line", line, 0);
+  rb_define_method(klass, "line=", set_line, 1);
   rb_define_method(klass, "content", get_native_content, 0);
   rb_define_method(klass, "native_content=", set_native_content, 1);
   rb_define_method(klass, "lang", get_lang, 0);

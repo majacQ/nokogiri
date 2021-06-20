@@ -7,9 +7,6 @@
 
 VALUE xslt;
 
-int vasprintf (char **strp, const char *fmt, va_list ap);
-void vasprintf_free (void *p);
-
 static void mark(nokogiriXsltStylesheetTuple *wrapper)
 {
   rb_gc_mark(wrapper->func_instances);
@@ -37,7 +34,7 @@ static void xslt_generic_error_handler(void * ctx, const char *msg, ...)
 
   rb_str_cat2((VALUE)ctx, message);
 
-  vasprintf_free(message);
+  free(message);
 }
 
 VALUE Nokogiri_wrap_xslt_stylesheet(xsltStylesheetPtr ss)
@@ -109,10 +106,6 @@ static VALUE serialize(VALUE self, VALUE xmlobj)
     return rval ;
 }
 
-static void swallow_superfluous_xml_errors(void * userdata, xmlErrorPtr error, ...)
-{
-}
-
 /*
  *  call-seq:
  *    transform(document, params = [])
@@ -165,7 +158,7 @@ static VALUE transform(int argc, VALUE* argv, VALUE self)
 
     errstr = rb_str_new(0, 0);
     xsltSetGenericErrorFunc((void *)errstr, xslt_generic_error_handler);
-    xmlSetGenericErrorFunc(NULL, (xmlGenericErrorFunc)&swallow_superfluous_xml_errors);
+    xmlSetGenericErrorFunc((void *)errstr, xslt_generic_error_handler);
 
     result = xsltApplyStylesheet(wrapper->ss, xml, params);
     free(params);

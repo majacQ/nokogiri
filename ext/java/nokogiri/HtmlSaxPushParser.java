@@ -34,7 +34,7 @@ package nokogiri;
 
 import static nokogiri.XmlSaxPushParser.terminateExecution;
 import static nokogiri.internals.NokogiriHelpers.getNokogiriClass;
-import static org.jruby.javasupport.util.RuntimeHelpers.invoke;
+import static org.jruby.runtime.Helpers.invoke;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -129,7 +129,7 @@ public class HtmlSaxPushParser extends RubyObject {
         final ByteArrayInputStream data = NokogiriHelpers.stringBytesToStream(chunk);
         if (data == null) {
             terminateTask(context.runtime);
-            throw new RaiseException(XmlSyntaxError.createHTMLSyntaxError(context.runtime)); // Nokogiri::HTML::SyntaxError
+            throw XmlSyntaxError.createHTMLSyntaxError(context.runtime).toThrowable(); // Nokogiri::HTML::SyntaxError
         }
 
         int errorCount0 = parserTask.getErrorCount();

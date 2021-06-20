@@ -7,12 +7,11 @@ VALUE mNokogiriXslt ;
 VALUE mNokogiriXmlSax ;
 VALUE mNokogiriHtmlSax ;
 
-#ifdef USE_INCLUDED_VASPRINTF
+#ifndef HAVE_VASPRINTF
 /*
- * I srsly hate windows.  it doesn't have vasprintf.
  * Thank you Geoffroy Couprie for this implementation of vasprintf!
  */
-int vasprintf (char **strp, const char *fmt, va_list ap)
+int vasprintf(char **strp, const char *fmt, va_list ap)
 {
   /* Mingw32/64 have a broken vsnprintf implementation that fails when
    * using a zero-byte limit in order to retrieve the required size for malloc.
@@ -28,16 +27,7 @@ int vasprintf (char **strp, const char *fmt, va_list ap)
 }
 #endif
 
-void vasprintf_free (void *p)
-{
-  free(p);
-}
-
-#ifdef HAVE_RUBY_UTIL_H
 #include "ruby/util.h"
-#else
-#include "util.h"
-#endif
 
 void nokogiri_root_node(xmlNodePtr node)
 {
@@ -76,24 +66,30 @@ void Init_nokogiri()
   mNokogiriHtmlSax  = rb_define_module_under(mNokogiriHtml, "SAX");
 
   rb_const_set( mNokogiri,
-                rb_intern("LIBXML_VERSION"),
+                rb_intern("LIBXML_COMPILED_VERSION"),
                 NOKOGIRI_STR_NEW2(LIBXML_DOTTED_VERSION)
               );
   rb_const_set( mNokogiri,
-                rb_intern("LIBXML_PARSER_VERSION"),
+                rb_intern("LIBXML_LOADED_VERSION"),
                 NOKOGIRI_STR_NEW2(xmlParserVersion)
+              );
+
+
+  rb_const_set( mNokogiri,
+                rb_intern("LIBXSLT_COMPILED_VERSION"),
+                NOKOGIRI_STR_NEW2(LIBXSLT_DOTTED_VERSION)
+              );
+  rb_const_set( mNokogiri,
+                rb_intern("LIBXSLT_LOADED_VERSION"),
+                NOKOGIRI_STR_NEW2(xsltEngineVersion)
               );
 
 #ifdef NOKOGIRI_USE_PACKAGED_LIBRARIES
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_USE_PACKAGED_LIBRARIES"), Qtrue);
-  rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXML2_PATH"), NOKOGIRI_STR_NEW2(NOKOGIRI_LIBXML2_PATH));
-  rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXSLT_PATH"), NOKOGIRI_STR_NEW2(NOKOGIRI_LIBXSLT_PATH));
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXML2_PATCHES"), rb_str_split(NOKOGIRI_STR_NEW2(NOKOGIRI_LIBXML2_PATCHES), " "));
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXSLT_PATCHES"), rb_str_split(NOKOGIRI_STR_NEW2(NOKOGIRI_LIBXSLT_PATCHES), " "));
 #else
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_USE_PACKAGED_LIBRARIES"), Qfalse);
-  rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXML2_PATH"), Qnil);
-  rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXSLT_PATH"), Qnil);
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXML2_PATCHES"), Qnil);
   rb_const_set(mNokogiri, rb_intern("NOKOGIRI_LIBXSLT_PATCHES"), Qnil);
 #endif

@@ -32,15 +32,10 @@
 
 package nokogiri;
 
-import static org.jruby.javasupport.util.RuntimeHelpers.invoke;
+import static org.jruby.runtime.Helpers.invoke;
 
 import java.io.IOException;
 import java.io.InputStream;
-
-import nokogiri.internals.NokogiriHandler;
-import nokogiri.internals.NokogiriHelpers;
-import nokogiri.internals.ParserContext;
-import nokogiri.internals.XmlSaxParser;
 
 import org.apache.xerces.parsers.AbstractSAXParser;
 import org.jruby.Ruby;
@@ -60,6 +55,11 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXNotRecognizedException;
 import org.xml.sax.SAXNotSupportedException;
 import org.xml.sax.SAXParseException;
+
+import nokogiri.internals.NokogiriHandler;
+import nokogiri.internals.NokogiriHelpers;
+import nokogiri.internals.ParserContext;
+import nokogiri.internals.XmlSaxParser;
 
 /**
  * Base class for the SAX parsers.
@@ -94,7 +94,10 @@ public class XmlSaxParserContext extends ParserContext {
             parser = createParser();
         }
         catch (SAXException se) {
-            throw RaiseException.createNativeRaiseException(runtime, se);
+            // Unexpected failure in XML subsystem
+            RaiseException ex = runtime.newRuntimeError(se.toString());
+            ex.initCause(se);
+            throw ex;
         }
     }
 
@@ -126,7 +129,7 @@ public class XmlSaxParserContext extends ParserContext {
         final Ruby runtime = context.runtime;
         XmlSaxParserContext ctx = newInstance(runtime, (RubyClass) klazz);
         ctx.initialize(runtime);
-        ctx.setInputSource(context, data, runtime.getNil());
+        ctx.setStringInputSource(context, data, runtime.getNil());
         return ctx;
     }
 
@@ -160,7 +163,7 @@ public class XmlSaxParserContext extends ParserContext {
         final Ruby runtime = context.runtime;
         XmlSaxParserContext ctx = newInstance(runtime, (RubyClass) klazz);
         ctx.initialize(runtime);
-        ctx.setInputSource(context, data, runtime.getNil());
+        ctx.setIOInputSource(context, data, runtime.getNil());
         return ctx;
     }
 
@@ -208,7 +211,8 @@ public class XmlSaxParserContext extends ParserContext {
                 parser.setFeature(FEATURE_CONTINUE_AFTER_FATAL_ERROR, true);
             }
             catch (Exception e) {
-                throw RaiseException.createNativeRaiseException(runtime, e);
+                // Unexpected failure in XML subsystem
+                throw runtime.newRuntimeError(e.getMessage());
             }
         }
     }
@@ -261,7 +265,8 @@ public class XmlSaxParserContext extends ParserContext {
             }
         }
         catch (SAXException ex) {
-            throw RaiseException.createNativeRaiseException(runtime, ex);
+            // Unexpected failure in XML subsystem
+            throw runtime.newRuntimeError(ex.getMessage());
         }
         catch (IOException ex) {
             throw runtime.newIOErrorFromException(ex);
