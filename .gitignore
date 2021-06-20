@@ -1,5 +1,4 @@
 *.gemspec
-*.rbc
 *.tmproj
 *~
 .*.swp
@@ -11,11 +10,15 @@
 .ruby-version
 .rvmrc
 .settings
+.vagrant
 .yardoc
 Gemfile*lock
 TAGS
 build
+concourse/docker-compose.yml
 concourse/private.yml
+concourse/images/*.generated
+coverage
 ext/java/Canna
 ext/java/nokogiri/**/*.class
 ext/nokogiri/*.dll

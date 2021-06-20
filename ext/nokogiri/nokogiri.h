@@ -1,6 +1,18 @@
 #ifndef NOKOGIRI_NATIVE
 #define NOKOGIRI_NATIVE
 
+#if _MSC_VER
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif /* WIN32_LEAN_AND_MEAN */
+#ifndef WIN32
+#define WIN32
+#endif /* WIN32 */
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -29,6 +41,7 @@ int vasprintf (char **strp, const char *fmt, va_list ap);
 #include <libxml/relaxng.h>
 #include <libxml/xinclude.h>
 #include <libxslt/extensions.h>
+#include <libxslt/xsltconfig.h>
 #include <libxml/c14n.h>
 #include <ruby.h>
 #include <ruby/st.h>

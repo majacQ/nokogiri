@@ -24,6 +24,10 @@ def openbsd?
   RbConfig::CONFIG['target_os'] =~ /openbsd/
 end
 
+def aix?
+  RbConfig::CONFIG["target_os"] =~ /aix/
+end
+
 def nix?
   ! (windows? || solaris? || darwin?)
 end
@@ -392,6 +396,10 @@ when arg_config('--clean')
   do_clean
 end
 
+if darwin?
+  ENV['CFLAGS'] = "#{ENV['CFLAGS']} -I /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/libxml2"
+end
+
 if openbsd? && !using_system_libraries?
   if `#{ENV['CC'] || '/usr/bin/cc'} -v 2>&1` !~ /clang/
     ENV['CC'] ||= find_executable('egcc') or
@@ -415,7 +423,7 @@ if windows?
   $CFLAGS << " -DXP_WIN -DXP_WIN32 -DUSE_INCLUDED_VASPRINTF"
 end
 
-if solaris?
+if solaris? || aix?
   $CFLAGS << " -DUSE_INCLUDED_VASPRINTF"
 end
 
@@ -462,7 +470,7 @@ else
   # The gem version constraint in the Rakefile is not respected at install time.
   # Keep this version in sync with the one in the Rakefile !
   require 'rubygems'
-  gem 'mini_portile2', '~> 2.4.0'
+  gem 'mini_portile2', '~> 2.5.0'
   require 'mini_portile2'
   message "Using mini_portile version #{MiniPortile::VERSION}\n"
 
@@ -482,50 +490,60 @@ else
           url: "http://zlib.net/fossils/#{recipe.name}-#{recipe.version}.tar.gz",
           sha256: dependencies["zlib"]["sha256"]
         }]
-      class << recipe
-        attr_accessor :cross_build_p
+      if windows?
+        class << recipe
+          attr_accessor :cross_build_p
 
-        def configure
-          Dir.chdir work_path do
-            mk = File.read 'win32/Makefile.gcc'
-            File.open 'win32/Makefile.gcc', 'wb' do |f|
-              f.puts "BINARY_PATH = #{path}/bin"
-              f.puts "LIBRARY_PATH = #{path}/lib"
-              f.puts "INCLUDE_PATH = #{path}/include"
-              mk.sub!(/^PREFIX\s*=\s*$/, "PREFIX = #{host}-") if cross_build_p
-              f.puts mk
+          def configure
+            Dir.chdir work_path do
+              mk = File.read 'win32/Makefile.gcc'
+              File.open 'win32/Makefile.gcc', 'wb' do |f|
+                f.puts "BINARY_PATH = #{path}/bin"
+                f.puts "LIBRARY_PATH = #{path}/lib"
+                f.puts "INCLUDE_PATH = #{path}/include"
+                mk.sub!(/^PREFIX\s*=\s*$/, "PREFIX = #{host}-") if cross_build_p
+                f.puts mk
+              end
             end
           end
-        end
 
-        def configured?
-          Dir.chdir work_path do
-            !! (File.read('win32/Makefile.gcc') =~ /^BINARY_PATH/)
+          def configured?
+            Dir.chdir work_path do
+              !! (File.read('win32/Makefile.gcc') =~ /^BINARY_PATH/)
+            end
+          end
+
+          def compile
+            execute "compile", "make -f win32/Makefile.gcc"
+          end
+
+          def install
+            execute "install", "make -f win32/Makefile.gcc install"
           end
         end
-
-        def compile
-          execute "compile", "make -f win32/Makefile.gcc"
-        end
-
-        def install
-          execute "install", "make -f win32/Makefile.gcc install"
+        recipe.cross_build_p = cross_build_p
+      else
+        class << recipe
+          def configure
+            execute "configure", ["env", "CHOST=#{host}", "CFLAGS=-fPIC #{ENV['CFLAGS']}", "./configure", "--static", configure_prefix]
+          end
         end
       end
-      recipe.cross_build_p = cross_build_p
     end
 
-    libiconv_recipe = process_recipe("libiconv", dependencies["libiconv"]["version"], static_p, cross_build_p) do |recipe|
-      recipe.files = [{
-          url: "http://ftp.gnu.org/pub/gnu/libiconv/#{recipe.name}-#{recipe.version}.tar.gz",
-          sha256: dependencies["libiconv"]["sha256"]
-        }]
-      recipe.configure_options += [
-        "CPPFLAGS=-Wall",
-        "CFLAGS=-O2 -g",
-        "CXXFLAGS=-O2 -g",
-        "LDFLAGS="
-      ]
+    unless nix?
+      libiconv_recipe = process_recipe("libiconv", dependencies["libiconv"]["version"], static_p, cross_build_p) do |recipe|
+        recipe.files = [{
+            url: "http://ftp.gnu.org/pub/gnu/libiconv/#{recipe.name}-#{recipe.version}.tar.gz",
+            sha256: dependencies["libiconv"]["sha256"]
+          }]
+        recipe.configure_options += [
+          "CPPFLAGS=-Wall",
+          "CFLAGS=-O2 -g",
+          "CXXFLAGS=-O2 -g",
+          "LDFLAGS="
+        ]
+      end
     end
   else
     if darwin? && !have_header('iconv.h')
@@ -613,7 +631,6 @@ EOM
       end
 
       # Defining a macro that expands to a C string; double quotes are significant.
-      $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATH=\"#{recipe.path}\"".inspect
       $CPPFLAGS << ' ' << "-DNOKOGIRI_#{recipe.name.upcase}_PATCHES=\"#{recipe.patch_files.map { |path| File.basename(path) }.join(' ')}\"".inspect
 
       case libname

@@ -1,6 +1,7 @@
+# frozen_string_literal: true
 module Nokogiri
   # The version of Nokogiri you are using
-  VERSION = '1.9.1'
+  VERSION = "1.11.0.rc2"
 
   class VersionInfo # :nodoc:
     def jruby?
@@ -8,26 +9,37 @@ module Nokogiri
     end
 
     def engine
-      defined?(RUBY_ENGINE) ? RUBY_ENGINE : 'mri'
+      defined?(RUBY_ENGINE) ? RUBY_ENGINE : "mri"
     end
 
-    def loaded_parser_version
-      LIBXML_PARSER_VERSION.
+    def loaded_libxml_version
+      Gem::Version.new(LIBXML_LOADED_VERSION.
         scan(/^(\d+)(\d\d)(\d\d)(?!\d)/).first.
         collect(&:to_i).
-        join(".")
+        join("."))
     end
 
-    def compiled_parser_version
-      LIBXML_VERSION
+    def compiled_libxml_version
+      Gem::Version.new LIBXML_COMPILED_VERSION
+    end
+
+    def loaded_libxslt_version
+      Gem::Version.new(LIBXSLT_LOADED_VERSION.
+        scan(/^(\d+)(\d\d)(\d\d)(?!\d)/).first.
+        collect(&:to_i).
+        join("."))
+    end
+
+    def compiled_libxslt_version
+      Gem::Version.new LIBXSLT_COMPILED_VERSION
     end
 
     def libxml2?
-      defined?(LIBXML_VERSION)
+      defined?(LIBXML_COMPILED_VERSION)
     end
 
     def libxml2_using_system?
-      ! libxml2_using_packaged?
+      !libxml2_using_packaged?
     end
 
     def libxml2_using_packaged?
@@ -35,55 +47,70 @@ module Nokogiri
     end
 
     def warnings
-      return [] unless libxml2?
+      warnings = []
 
-      if compiled_parser_version != loaded_parser_version
-        ["Nokogiri was built against LibXML version #{compiled_parser_version}, but has dynamically loaded #{loaded_parser_version}"]
-      else
-        []
+      if libxml2?
+        if compiled_libxml_version != loaded_libxml_version
+          warnings << "Nokogiri was built against libxml version #{compiled_libxml_version}, but has dynamically loaded #{loaded_libxml_version}"
+        end
+
+        if compiled_libxslt_version != loaded_libxslt_version
+          warnings << "Nokogiri was built against libxslt version #{compiled_libxslt_version}, but has dynamically loaded #{loaded_libxslt_version}"
+        end
       end
+
+      warnings
     end
 
     def to_hash
-      hash_info = {}
-      hash_info['warnings']              = []
-      hash_info['nokogiri']              = Nokogiri::VERSION
-      hash_info['ruby']                  = {}
-      hash_info['ruby']['version']       = ::RUBY_VERSION
-      hash_info['ruby']['platform']      = ::RUBY_PLATFORM
-      hash_info['ruby']['description']   = ::RUBY_DESCRIPTION
-      hash_info['ruby']['engine']        = engine
-      hash_info['ruby']['jruby']         = jruby? if jruby?
-
-      if libxml2?
-        hash_info['libxml']              = {}
-        hash_info['libxml']['binding']   = 'extension'
-        if libxml2_using_packaged?
-          hash_info['libxml']['source']  = "packaged"
-          hash_info['libxml']['libxml2_path'] = NOKOGIRI_LIBXML2_PATH
-          hash_info['libxml']['libxslt_path'] = NOKOGIRI_LIBXSLT_PATH
-          hash_info['libxml']['libxml2_patches'] = NOKOGIRI_LIBXML2_PATCHES
-          hash_info['libxml']['libxslt_patches'] = NOKOGIRI_LIBXSLT_PATCHES
-        else
-          hash_info['libxml']['source']  = "system"
+      {}.tap do |vi|
+        vi["warnings"] = []
+        vi["nokogiri"] = Nokogiri::VERSION
+        vi["ruby"] = {}.tap do |ruby|
+          ruby["version"] = ::RUBY_VERSION
+          ruby["platform"] = ::RUBY_PLATFORM
+          ruby["description"] = ::RUBY_DESCRIPTION
+          ruby["engine"] = engine
+          ruby["jruby"] = jruby? if jruby?
         end
-        hash_info['libxml']['compiled']  = compiled_parser_version
-        hash_info['libxml']['loaded']    = loaded_parser_version
-        hash_info['warnings']            = warnings
-      elsif jruby?
-        hash_info['xerces']   = Nokogiri::XERCES_VERSION
-        hash_info['nekohtml'] = Nokogiri::NEKO_VERSION
-      end
 
-      hash_info
+        if libxml2?
+          vi["libxml"] = {}.tap do |libxml|
+            if libxml2_using_packaged?
+              libxml["source"] = "packaged"
+              libxml["patches"] = NOKOGIRI_LIBXML2_PATCHES
+            else
+              libxml["source"] = "system"
+            end
+            libxml["compiled"] = compiled_libxml_version.to_s
+            libxml["loaded"] = loaded_libxml_version.to_s
+          end
+
+          vi["libxslt"] = {}.tap do |libxslt|
+            if libxml2_using_packaged?
+              libxslt["source"] = "packaged"
+              libxslt["patches"] = NOKOGIRI_LIBXSLT_PATCHES
+            else
+              libxslt["source"] = "system"
+            end
+            libxslt["compiled"] = compiled_libxslt_version.to_s
+            libxslt["loaded"] = loaded_libxslt_version.to_s
+          end
+
+          vi["warnings"] = warnings
+        elsif jruby?
+          vi["xerces"] = Nokogiri::XERCES_VERSION
+          vi["nekohtml"] = Nokogiri::NEKO_VERSION
+        end
+      end
     end
 
     def to_markdown
       begin
-        require 'psych'
+        require "psych"
       rescue LoadError
       end
-      require 'yaml'
+      require "yaml"
       "# Nokogiri (#{Nokogiri::VERSION})\n" +
       YAML.dump(to_hash).each_line.map { |line| "    #{line}" }.join
     end
@@ -96,14 +123,27 @@ module Nokogiri
     def self.instance; @@instance; end
   end
 
-  # More complete version information about libxml
-  VERSION_INFO = VersionInfo.instance.to_hash
-
-  def self.uses_libxml? # :nodoc:
-    VersionInfo.instance.libxml2?
+  def self.uses_libxml?(requirement = nil) # :nodoc:
+    return false unless VersionInfo.instance.libxml2?
+    return true unless requirement
+    return Gem::Requirement.new(requirement).satisfied_by?(VersionInfo.instance.loaded_libxml_version)
   end
 
   def self.jruby? # :nodoc:
     VersionInfo.instance.jruby?
   end
+
+  # Ensure constants used in this file are loaded - see #1896
+  if Nokogiri.jruby?
+    require "nokogiri/jruby/dependencies"
+  end
+  begin
+    RUBY_VERSION =~ /(\d+\.\d+)/
+    require "nokogiri/#{$1}/nokogiri"
+  rescue LoadError
+    require "nokogiri/nokogiri"
+  end
+
+  # More complete version information about libxml
+  VERSION_INFO = VersionInfo.instance.to_hash
 end
